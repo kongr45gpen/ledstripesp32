@@ -50,6 +50,7 @@ struct State
     uint8_t cw;
     uint16_t color_temperature;
     enum Color_Mode color_mode;
+    float transition;
 };
 
 struct State state = {
@@ -61,7 +62,8 @@ struct State state = {
     .ww = 0,
     .cw = 0,
     .color_temperature = 400,
-    .color_mode = Color_Temp
+    .color_mode = Color_Temp,
+    .transition = 0,
 };
 
 TaskHandle_t led_task = NULL;
@@ -77,14 +79,14 @@ void led_blink(void *pvParams) {
         .clk_cfg = LEDC_AUTO_CLK,             // Auto select the source clock
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-
     ESP_LOGI("LED", "LED timer configured");
 
 
-
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[0]));
+    ESP_LOGI("LED", "LED channel configured");
 
-    ESP_LOGI("MAIN", "LED channel configured");
+    ESP_ERROR_CHECK(ledc_fade_func_install(0));
+    ESP_LOGI("LED", "LED fade configured");
 
     uint16_t duty = 0;
     
@@ -93,10 +95,6 @@ void led_blink(void *pvParams) {
     const float gamma = 10;
 
     while(1) {
-        //duty = (duty + 10) % (2 << 12);
-        //duty = 3;
-        //duty = state.brightness * 16;
-
         ESP_LOGI("LED", "Brightness input %d", state.brightness);
 
         float input_brightness = state.brightness / 255.f;
@@ -106,25 +104,28 @@ void led_blink(void *pvParams) {
 
         ESP_LOGD("LED", "Brightness output %d [gamma = %f]", duty, gamma);
 
-        ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, duty);
-        ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
+        if (state.transition != 0) {
+            // Sanity checks
+            if (state.transition > 3) state.transition = 3;
+            if (state.transition < 0) state.transition = 0;
 
-        xTaskNotifyWait(0, 0, NULL, pdMS_TO_TICKS(2000));
+            ESP_LOGD("LED", "Starting transition [%f s]", state.transition);
+
+            ledc_set_fade_with_time(
+                ledc_channel[0].speed_mode,
+                ledc_channel[0].channel,
+                duty,
+                1000 * state.transition);
+            ledc_fade_start(ledc_channel[0].speed_mode, ledc_channel[0].channel, LEDC_FADE_WAIT_DONE);
+
+            ESP_LOGD("LED", "Transition complete");
+        } else {
+            ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, duty);
+            ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
+        }
+
+        xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
     }
-
-    // gpio_pad_select_gpio(LED_PIN);
-    // gpio_set_direction (LED_PIN,GPIO_MODE_OUTPUT);
-    // while (1) {
-    //     // char* test_str = "blinkomania.\n";
-    //     // uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
-
-    //     ESP_LOGI("MAIN", "Time to log and blink!");
-
-    //     gpio_set_level(LED_PIN,0);
-    //     vTaskDelay(1000/portTICK_RATE_MS);
-    //     gpio_set_level(LED_PIN,1);
-    //     vTaskDelay(1000/portTICK_RATE_MS);
-    // }
 }
 
 cJSON* state_to_json() {
@@ -520,6 +521,11 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 state.color_mode = RGBWW;
             }
 
+            cJSON *transition = cJSON_GetObjectItemCaseSensitive(json, "transition");
+            if (transition) {
+                state.transition = cJSON_GetNumberValue(transition);
+            }
+
             cJSON_Delete(json);
 
             {
@@ -563,7 +569,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 }
 
 void app_main() {
-    esp_log_level_set("*", ESP_LOG_DEBUG);      // enable WARN logs from WiFi stack
+    esp_log_level_set("*", ESP_LOG_INFO);
+    esp_log_level_set("LED", ESP_LOG_DEBUG);
 
     //Initialize NVS
     

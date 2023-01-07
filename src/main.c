@@ -66,7 +66,18 @@ struct State state = {
     .transition = 0.1,
 };
 
+static const char *TAG = "Home App";
+
 TaskHandle_t led_task = NULL;
+TaskHandle_t nvs_task = NULL;
+
+static void log_error_if_nonzero(const char * message, int error_code)
+{
+    if (error_code != 0) {
+        ESP_LOGE(TAG, "Last error %s: 0x%x", message, error_code);
+        ESP_LOGE(TAG, "Error description: %s", esp_err_to_name(error_code));
+    }
+}
 
 void led_blink(void *pvParams) {
     ESP_LOGI("MAIN", "Configuring LED timer...");
@@ -132,6 +143,40 @@ void led_blink(void *pvParams) {
     }
 }
 
+void nvs_manager(void *pvParams) {
+    // Initialise state from storage
+    nvs_handle_t handle;
+    esp_err_t err;
+
+    err = nvs_open("storage", NVS_READWRITE, &handle);
+    log_error_if_nonzero("from NVS storage open", err);
+
+    // Initialise config from memory
+    {
+        float transition;
+        err = nvs_get_u32(handle, "transition", (uint32_t*)(&transition));
+        log_error_if_nonzero("reading NVS transition", err);
+
+        if (err == ESP_OK) {
+            ESP_LOGI("NVS", "Read transition from storage: %f s", transition);
+            state.transition = transition;
+        }
+    }
+
+    while (true) {
+        xTaskNotifyWait(0, 0, 0, portMAX_DELAY);
+        ESP_LOGI("NVS", "Storing current configuration to NVS");
+
+        err = nvs_set_u32(handle, "transition", *((uint32_t*)(&(state.transition))));
+        log_error_if_nonzero("writing NVS transition", err);
+
+        err = nvs_commit(handle);
+        log_error_if_nonzero("from NVS commit", err);
+    }
+
+    nvs_close(handle); // never called
+}
+
 cJSON* state_to_json() {
     cJSON *json = cJSON_CreateObject();
 
@@ -161,7 +206,6 @@ cJSON* state_to_json() {
     return json;
 }
 
-
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
 
@@ -170,8 +214,6 @@ static EventGroupHandle_t s_wifi_event_group;
  * - we failed to connect after the maximum amount of retries */
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
-
-static const char *TAG = "wifi station";
 
 static int s_retry_num = 0;
 
@@ -381,14 +423,6 @@ void wifi_init_sta(void)
     }
 }
 
-static void log_error_if_nonzero(const char * message, int error_code)
-{
-    if (error_code != 0) {
-        ESP_LOGE(TAG, "Last error %s: 0x%x", message, error_code);
-    }
-}
-
-
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 {
     esp_mqtt_client_handle_t client = event->client;
@@ -543,6 +577,13 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
             xTaskNotify(led_task, 0, eNoAction);
 
+            // Commit changes to NVS if needed
+            if (nvs_task != NULL) {
+                if (transition) {
+                    xTaskNotify(nvs_task, 0, eNoAction);
+                }
+            }
+
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
@@ -608,6 +649,7 @@ void app_main() {
     esp_mqtt_client_start(client);
 
     xTaskCreate(&led_blink,"LED_BLINK",2048,NULL,5,&led_task);
+    //xTaskCreate(&nvs_manager,"NVS_MANAGER",2048,NULL,3,&nvs_task);
     // vTaskStartScheduler();
 
 }

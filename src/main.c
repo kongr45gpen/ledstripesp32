@@ -73,7 +73,7 @@ void led_blink(void *pvParams) {
 
     ledc_timer_config_t ledc_timer = {
         .duty_resolution = LEDC_TIMER_12_BIT, // resolution of PWM duty
-        .freq_hz = 5000,                      // frequency of PWM signal
+        .freq_hz = 10000,                      // frequency of PWM signal
         .speed_mode = LEDC_HIGH_SPEED_MODE,   // timer mode
         .timer_num = LEDC_TIMER_0,            // timer index
         .clk_cfg = LEDC_AUTO_CLK,             // Auto select the source clock
@@ -92,7 +92,7 @@ void led_blink(void *pvParams) {
     
     // Gamma calculation at https://www.desmos.com/calculator/j2tbglr57o
     // Main function: gamma^x
-    const float gamma = 10;
+    const float gamma = 4;
 
     while(1) {
         ESP_LOGI("LED", "Brightness input %d", state.brightness);
@@ -542,12 +542,6 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             }
 
             xTaskNotify(led_task, 0, eNoAction);
-
-            // {
-            //     ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, state.brightness / 256.0 * ((1 << 12) - 1));
-            //     ESP_LOGI("LED", "Set brightness to %f", state.brightness / 256.0 * ((1 << 12) - 1));
-            //     ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
-            // }
 
             break;
         case MQTT_EVENT_ERROR:

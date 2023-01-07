@@ -4,6 +4,7 @@
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
 #include <string.h>
+#include <math.h>
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
@@ -84,10 +85,24 @@ void led_blink(void *pvParams) {
     ESP_LOGI("MAIN", "LED channel configured");
 
     uint16_t duty = 0;
+    
+    // Gamma calculation at https://www.desmos.com/calculator/j2tbglr57o
+    // Main function: gamma^x
+    const float gamma = 10;
+
     while(1) {
         //duty = (duty + 10) % (2 << 12);
         //duty = 3;
-        duty = state.brightness * 16;
+        //duty = state.brightness * 16;
+
+        ESP_LOGI("LED", "Brightness input %d", state.brightness);
+
+        float input_brightness = state.brightness / 255.f;
+        float gamma_calculation = powf(gamma, input_brightness);
+        float output_brightness = 4095.f * (gamma_calculation - 1) / (gamma - 1);
+        duty = (uint16_t) output_brightness;
+
+        ESP_LOGD("LED", "Brightness output %d [gamma = %f]", duty, gamma);
 
         ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, duty);
         ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
@@ -513,11 +528,11 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 free(json_string);
             }
 
-            {
-                ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, state.brightness / 256.0 * ((1 << 12) - 1));
-                ESP_LOGI("LED", "Set brightness to %f", state.brightness / 256.0 * ((1 << 12) - 1));
-                ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
-            }
+            // {
+            //     ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, state.brightness / 256.0 * ((1 << 12) - 1));
+            //     ESP_LOGI("LED", "Set brightness to %f", state.brightness / 256.0 * ((1 << 12) - 1));
+            //     ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
+            // }
 
             break;
         case MQTT_EVENT_ERROR:

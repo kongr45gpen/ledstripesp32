@@ -11,14 +11,13 @@
 #include "mqtt_client.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
+#include "config.h"
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "driver/ledc.h"
 
-
-#define DEVICE_ID "qMHSxIpfAz2001ll"
-#define LED_PIN 4
+#define EXAMPLE_ESP_MAXIMUM_RETRY  5
 
 const uart_port_t uart_num = UART_NUM_2;
 
@@ -109,41 +108,6 @@ void led_blink(void *pvParams) {
     //     vTaskDelay(1000/portTICK_RATE_MS);
     // }
 }
-
-#define EXAMPLE_ESP_WIFI_SSID      "NETWORK_NAME"
-#define EXAMPLE_ESP_WIFI_PASS      "NETWORK_PASS"
-#define EXAMPLE_ESP_MAXIMUM_RETRY  5
-#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA2_PSK
-
-enum Color_Mode {
-    Color_Temp,
-    RGBWW
-};
-
-struct State
-{
-    bool state;
-    uint8_t brightness;
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t ww;
-    uint8_t cw;
-    uint16_t color_temperature;
-    enum Color_Mode color_mode;
-};
-
-struct State state = {
-    .state = 0,
-    .brightness = 100,
-    .r = 255,
-    .g = 255,
-    .b = 255,
-    .ww = 0,
-    .cw = 0,
-    .color_temperature = 400,
-    .color_mode = Color_Temp
-};
 
 cJSON* state_to_json() {
     cJSON *json = cJSON_CreateObject();
@@ -359,8 +323,8 @@ void wifi_init_sta(void)
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
-            .password = EXAMPLE_ESP_WIFI_PASS,
+            .ssid = ESP_WIFI_SSID,
+            .password = ESP_WIFI_PASS,
             /* Setting a password implies station will connect to all security modes including WEP/WPA.
              * However these modes are deprecated and not advisable to be used. Incase your Access point
              * doesn't support WPA2, these mode can be enabled by commenting below line */
@@ -385,10 +349,10 @@ void wifi_init_sta(void)
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
-                 EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+                 ESP_WIFI_SSID, ESP_WIFI_PASS);
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
-                 EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+                 ESP_WIFI_SSID, ESP_WIFI_PASS);
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
@@ -582,12 +546,14 @@ void app_main() {
     esp_log_level_set("*", ESP_LOG_DEBUG);      // enable WARN logs from WiFi stack
 
     //Initialize NVS
+    
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
       ESP_ERROR_CHECK(nvs_flash_erase());
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
 
     // wifi_scan();
 
@@ -618,4 +584,5 @@ void app_main() {
 
     xTaskCreate(&led_blink,"LED_BLINK",2048,NULL,5,NULL);
     // vTaskStartScheduler();
+
 }

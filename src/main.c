@@ -54,7 +54,7 @@ struct State
 };
 
 struct State state = {
-    .state = 0,
+    .state = 1,
     .brightness = 100,
     .r = 255,
     .g = 255,
@@ -63,7 +63,7 @@ struct State state = {
     .cw = 0,
     .color_temperature = 400,
     .color_mode = Color_Temp,
-    .transition = 0,
+    .transition = 0.1,
 };
 
 TaskHandle_t led_task = NULL;
@@ -97,10 +97,14 @@ void led_blink(void *pvParams) {
     while(1) {
         ESP_LOGI("LED", "Brightness input %d", state.brightness);
 
-        float input_brightness = state.brightness / 255.f;
-        float gamma_calculation = powf(gamma, input_brightness);
-        float output_brightness = 4095.f * (gamma_calculation - 1) / (gamma - 1);
-        duty = (uint16_t) output_brightness;
+        if (state.state != 0) {
+            float input_brightness = state.brightness / 255.f;
+            float gamma_calculation = powf(gamma, input_brightness);
+            float output_brightness = 4095.f * (gamma_calculation - 1) / (gamma - 1);
+            duty = (uint16_t) output_brightness;
+        } else {
+            duty = 0;
+        }
 
         ESP_LOGD("LED", "Brightness output %d [gamma = %f]", duty, gamma);
 

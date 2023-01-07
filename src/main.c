@@ -18,7 +18,7 @@
 
 
 #define DEVICE_ID "qMHSxIpfAz2001ll"
-#define LED_PIN 2
+#define LED_PIN 4
 
 const uart_port_t uart_num = UART_NUM_2;
 
@@ -33,6 +33,36 @@ ledc_channel_config_t ledc_channel[1] = {
             // .flags.output_invert = 0
         }
     };
+
+enum Color_Mode {
+    Color_Temp,
+    RGBWW
+};
+
+struct State
+{
+    bool state;
+    uint8_t brightness;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t ww;
+    uint8_t cw;
+    uint16_t color_temperature;
+    enum Color_Mode color_mode;
+};
+
+struct State state = {
+    .state = 0,
+    .brightness = 100,
+    .r = 255,
+    .g = 255,
+    .b = 255,
+    .ww = 0,
+    .cw = 0,
+    .color_temperature = 400,
+    .color_mode = Color_Temp
+};
 
 void led_blink(void *pvParams) {
     ESP_LOGI("MAIN", "Configuring LED timer...");
@@ -56,8 +86,9 @@ void led_blink(void *pvParams) {
 
     uint16_t duty = 0;
     while(1) {
-        duty = (duty + 10) % (2 << 12);
-        duty = 3;
+        //duty = (duty + 10) % (2 << 12);
+        //duty = 3;
+        duty = state.brightness * 16;
 
         ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, duty);
         ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);

@@ -448,19 +448,16 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
           \"esp32_" DEVICE_ID "\" \
        ], \
        \"manufacturer\":\"kongr45gpen\", \
-       \"model\":\"ESP32 RGBWW light, v1\", \
+       \"model\":\"ESP32 dimmer light, v1\", \
        \"name\":\"" DEVICE_ID "\", \
        \"sw_version\":\"ESP32 IDF RGB controller 0.1.0\" \
     }, \
     \"json_attributes_topic\":\"esp32/" DEVICE_ID "\", \
-    \"max_mireds\":500, \
-    \"min_mireds\":150, \
     \"name\":\"" DEVICE_ID "\", \
     \"schema\":\"json\", \
     \"state_topic\":\"esp32/" DEVICE_ID "\", \
     \"supported_color_modes\":[ \
-       \"color_temp\", \
-       \"rgbww\" \
+       \"brightness\"\
     ], \
     \"unique_id\":\"" DEVICE_ID "_light_esp32\" \
  } \

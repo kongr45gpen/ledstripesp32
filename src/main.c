@@ -64,6 +64,8 @@ struct State state = {
     .color_mode = Color_Temp
 };
 
+TaskHandle_t led_task = NULL;
+
 void led_blink(void *pvParams) {
     ESP_LOGI("MAIN", "Configuring LED timer...");
 
@@ -106,7 +108,8 @@ void led_blink(void *pvParams) {
 
         ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, duty);
         ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
-        vTaskDelay(1);
+
+        xTaskNotifyWait(0, 0, NULL, pdMS_TO_TICKS(2000));
     }
 
     // gpio_pad_select_gpio(LED_PIN);
@@ -528,6 +531,8 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 free(json_string);
             }
 
+            xTaskNotify(led_task, 0, eNoAction);
+
             // {
             //     ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, state.brightness / 256.0 * ((1 << 12) - 1));
             //     ESP_LOGI("LED", "Set brightness to %f", state.brightness / 256.0 * ((1 << 12) - 1));
@@ -597,7 +602,7 @@ void app_main() {
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
     esp_mqtt_client_start(client);
 
-    xTaskCreate(&led_blink,"LED_BLINK",2048,NULL,5,NULL);
+    xTaskCreate(&led_blink,"LED_BLINK",2048,NULL,5,&led_task);
     // vTaskStartScheduler();
 
 }

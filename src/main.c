@@ -22,11 +22,29 @@
 
 const uart_port_t uart_num = UART_NUM_2;
 
-ledc_channel_config_t ledc_channel[1] = {
+ledc_channel_config_t ledc_channel[3] = {
         {
             .channel = LEDC_CHANNEL_0,
             .duty = 0,
             .gpio_num = LED_PIN,
+            .speed_mode = LEDC_HIGH_SPEED_MODE,
+            .hpoint = 0,
+            .timer_sel = LEDC_TIMER_0,
+            // .flags.output_invert = 0
+        },
+        {
+            .channel = LEDC_CHANNEL_1,
+            .duty = 0,
+            .gpio_num = LED2_PIN,
+            .speed_mode = LEDC_HIGH_SPEED_MODE,
+            .hpoint = 0,
+            .timer_sel = LEDC_TIMER_0,
+            // .flags.output_invert = 0
+        },
+        {
+            .channel = LEDC_CHANNEL_2,
+            .duty = 0,
+            .gpio_num = LED3_PIN,
             .speed_mode = LEDC_HIGH_SPEED_MODE,
             .hpoint = 0,
             .timer_sel = LEDC_TIMER_0,
@@ -93,13 +111,15 @@ void led_blink(void *pvParams) {
     ESP_LOGI("LED", "LED timer configured");
 
 
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[0]));
-    ESP_LOGI("LED", "LED channel configured");
+    for (int i = 0; i < 3; i++) {
+        ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[i]));
+        ESP_LOGD("LED", "LED channel %d configured", i);
+    }
 
     ESP_ERROR_CHECK(ledc_fade_func_install(0));
     ESP_LOGI("LED", "LED fade configured");
 
-    uint16_t duty = 0;
+    uint16_t duty[3] = { 0 };
     
     // Gamma calculation at https://www.desmos.com/calculator/j2tbglr57o
     // Main function: gamma^x
@@ -109,15 +129,22 @@ void led_blink(void *pvParams) {
         ESP_LOGI("LED", "Brightness input %d", state.brightness);
 
         if (state.state != 0) {
-            float input_brightness = state.brightness / 255.f;
-            float gamma_calculation = powf(gamma, input_brightness);
-            float output_brightness = 4095.f * (gamma_calculation - 1) / (gamma - 1);
-            duty = (uint16_t) output_brightness;
+            for (int i = 0; i < 3; i++) {
+                float input_brightness = state.brightness / 255.f;
+                if (i == 0) input_brightness *= state.r / 255.f;
+                else if (i == 1) input_brightness *= state.g / 255.f;
+                else if (i == 2) input_brightness *= state.b / 255.f;
+                float gamma_calculation = powf(gamma, input_brightness);
+                float output_brightness = 4095.f * (gamma_calculation - 1) / (gamma - 1);
+                duty[i] = (uint16_t) output_brightness;
+            }
         } else {
-            duty = 0;
+            for (int i = 0; i < 3; i++) {
+                duty[i] = 0;
+            }
         }
 
-        ESP_LOGD("LED", "Brightness output %d [gamma = %f]", duty, gamma);
+        ESP_LOGD("LED", "Brightness output %d %d %d [gamma = %f]", duty[0], duty[1], duty[2], gamma);
 
         if (state.transition != 0) {
             // Sanity checks
@@ -126,17 +153,21 @@ void led_blink(void *pvParams) {
 
             ESP_LOGD("LED", "Starting transition [%f s]", state.transition);
 
-            ledc_set_fade_with_time(
-                ledc_channel[0].speed_mode,
-                ledc_channel[0].channel,
-                duty,
-                1000 * state.transition);
-            ledc_fade_start(ledc_channel[0].speed_mode, ledc_channel[0].channel, LEDC_FADE_WAIT_DONE);
+            for (int i = 0; i < 3; i++) {
+                ledc_set_fade_with_time(
+                    ledc_channel[i].speed_mode,
+                    ledc_channel[i].channel,
+                    duty[i],
+                    1000 * state.transition);
+                ledc_fade_start(ledc_channel[i].speed_mode, ledc_channel[i].channel, i == 2 ? LEDC_FADE_WAIT_DONE : LEDC_FADE_NO_WAIT);
+            }
 
             ESP_LOGD("LED", "Transition complete");
         } else {
-            ledc_set_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel, duty);
-            ledc_update_duty(ledc_channel[0].speed_mode, ledc_channel[0].channel);
+            for (int i = 0; i < 3; i++) {
+                ledc_set_duty(ledc_channel[i].speed_mode, ledc_channel[i].channel, duty[i]);
+                ledc_update_duty(ledc_channel[i].speed_mode, ledc_channel[i].channel);
+            }
         }
 
         xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
@@ -448,16 +479,16 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
           \"esp32_" DEVICE_ID "\" \
        ], \
        \"manufacturer\":\"kongr45gpen\", \
-       \"model\":\"ESP32 dimmer light, v1\", \
+       \"model\":\"ESP32 RGB light, v1\", \
        \"name\":\"" DEVICE_ID "\", \
-       \"sw_version\":\"ESP32 IDF RGB controller 0.1.0\" \
+       \"sw_version\":\"ESP32 IDF RGB controller 0.1.1\" \
     }, \
     \"json_attributes_topic\":\"esp32/" DEVICE_ID "\", \
     \"name\":\"" DEVICE_ID "\", \
     \"schema\":\"json\", \
     \"state_topic\":\"esp32/" DEVICE_ID "\", \
     \"supported_color_modes\":[ \
-       \"brightness\"\
+       \"rgb\"\
     ], \
     \"unique_id\":\"" DEVICE_ID "_light_esp32\" \
  } \

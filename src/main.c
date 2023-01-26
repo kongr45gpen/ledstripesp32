@@ -18,39 +18,11 @@
 #include "lwip/sys.h"
 #include "driver/ledc.h"
 
+#include "tasks.h"
+
 #define EXAMPLE_ESP_MAXIMUM_RETRY  5
 
 const uart_port_t uart_num = UART_NUM_2;
-
-ledc_channel_config_t ledc_channel[3] = {
-        {
-            .channel = LEDC_CHANNEL_0,
-            .duty = 0,
-            .gpio_num = LED_PIN,
-            .speed_mode = LEDC_HIGH_SPEED_MODE,
-            .hpoint = 0,
-            .timer_sel = LEDC_TIMER_0,
-            // .flags.output_invert = 0
-        },
-        {
-            .channel = LEDC_CHANNEL_1,
-            .duty = 0,
-            .gpio_num = LED2_PIN,
-            .speed_mode = LEDC_HIGH_SPEED_MODE,
-            .hpoint = 0,
-            .timer_sel = LEDC_TIMER_0,
-            // .flags.output_invert = 0
-        },
-        {
-            .channel = LEDC_CHANNEL_2,
-            .duty = 0,
-            .gpio_num = LED3_PIN,
-            .speed_mode = LEDC_HIGH_SPEED_MODE,
-            .hpoint = 0,
-            .timer_sel = LEDC_TIMER_0,
-            // .flags.output_invert = 0
-        }
-    };
 
 enum Color_Mode {
     Color_Temp,
@@ -94,83 +66,6 @@ static void log_error_if_nonzero(const char * message, int error_code)
     if (error_code != 0) {
         ESP_LOGE(TAG, "Last error %s: 0x%x", message, error_code);
         ESP_LOGE(TAG, "Error description: %s", esp_err_to_name(error_code));
-    }
-}
-
-void led_blink(void *pvParams) {
-    ESP_LOGI("MAIN", "Configuring LED timer...");
-
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = LEDC_TIMER_12_BIT, // resolution of PWM duty
-        .freq_hz = 10000,                      // frequency of PWM signal
-        .speed_mode = LEDC_HIGH_SPEED_MODE,   // timer mode
-        .timer_num = LEDC_TIMER_0,            // timer index
-        .clk_cfg = LEDC_AUTO_CLK,             // Auto select the source clock
-    };
-    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-    ESP_LOGI("LED", "LED timer configured");
-
-
-    for (int i = 0; i < 3; i++) {
-        ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[i]));
-        ESP_LOGD("LED", "LED channel %d configured", i);
-    }
-
-    ESP_ERROR_CHECK(ledc_fade_func_install(0));
-    ESP_LOGI("LED", "LED fade configured");
-
-    uint16_t duty[3] = { 0 };
-    
-    // Gamma calculation at https://www.desmos.com/calculator/j2tbglr57o
-    // Main function: gamma^x
-    const float gamma = 4;
-
-    while(1) {
-        ESP_LOGI("LED", "Brightness input %d", state.brightness);
-
-        if (state.state != 0) {
-            for (int i = 0; i < 3; i++) {
-                float input_brightness = state.brightness / 255.f;
-                if (i == 0) input_brightness *= state.r / 255.f;
-                else if (i == 1) input_brightness *= state.g / 255.f;
-                else if (i == 2) input_brightness *= state.b / 255.f;
-                float gamma_calculation = powf(gamma, input_brightness);
-                float output_brightness = 4095.f * (gamma_calculation - 1) / (gamma - 1);
-                duty[i] = (uint16_t) output_brightness;
-            }
-        } else {
-            for (int i = 0; i < 3; i++) {
-                duty[i] = 0;
-            }
-        }
-
-        ESP_LOGD("LED", "Brightness output %d %d %d [gamma = %f]", duty[0], duty[1], duty[2], gamma);
-
-        if (state.transition != 0) {
-            // Sanity checks
-            if (state.transition > 3) state.transition = 3;
-            if (state.transition < 0) state.transition = 0;
-
-            ESP_LOGD("LED", "Starting transition [%f s]", state.transition);
-
-            for (int i = 0; i < 3; i++) {
-                ledc_set_fade_with_time(
-                    ledc_channel[i].speed_mode,
-                    ledc_channel[i].channel,
-                    duty[i],
-                    1000 * state.transition);
-                ledc_fade_start(ledc_channel[i].speed_mode, ledc_channel[i].channel, i == 2 ? LEDC_FADE_WAIT_DONE : LEDC_FADE_NO_WAIT);
-            }
-
-            ESP_LOGD("LED", "Transition complete");
-        } else {
-            for (int i = 0; i < 3; i++) {
-                ledc_set_duty(ledc_channel[i].speed_mode, ledc_channel[i].channel, duty[i]);
-                ledc_update_duty(ledc_channel[i].speed_mode, ledc_channel[i].channel);
-            }
-        }
-
-        xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
     }
 }
 
@@ -219,11 +114,11 @@ cJSON* state_to_json() {
         cJSON_AddNumberToObject(color, "r", state.r);
         cJSON_AddNumberToObject(color, "g", state.g);
         cJSON_AddNumberToObject(color, "b", state.b);
-        cJSON_AddNumberToObject(color, "w", state.ww);
-        cJSON_AddNumberToObject(color, "c", state.cw);
+        //cJSON_AddNumberToObject(color, "w", state.ww);
+        //cJSON_AddNumberToObject(color, "c", state.cw);
 
         cJSON_AddItemToObject(json, "color", color);
-        cJSON_AddStringToObject(json, "color_mode", "rgbww");
+        cJSON_AddStringToObject(json, "color_mode", "rgb");
     }
 
     cJSON_AddNumberToObject(json, "brightness", state.brightness);

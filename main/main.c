@@ -22,7 +22,7 @@
 
 #define EXAMPLE_ESP_MAXIMUM_RETRY  5
 
-const uart_port_t uart_num = UART_NUM_2;
+const uart_port_t uart_num = UART_NUM_0;
 
 enum Color_Mode {
     Color_Temp,
@@ -564,7 +564,7 @@ void app_main() {
     // uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
 
     const esp_mqtt_client_config_t mqtt_cfg = {
-    .uri = "mqtt://home",
+        .broker.address.uri = "mqtt://home",
         // .user_context = (void *)your_context
     };
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);

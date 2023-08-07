@@ -5,7 +5,7 @@ template <int Pin_Count>
 ledc_channel_config_t Light<Pin_Count>::generate_led_configuration(int index) {
     ledc_channel_config_t config = {
         .gpio_num = pins[index],
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = static_cast<ledc_channel_t>(index),
         .intr_type = LEDC_INTR_DISABLE,
         .timer_sel = LEDC_TIMER_0,
@@ -22,7 +22,7 @@ void Light<Pin_Count>::initialise() {
     ESP_LOGI("MAIN", "Configuring LED timer...");
 
     ledc_timer_config_t ledc_timer = {
-        .speed_mode = LEDC_HIGH_SPEED_MODE,   // timer mode
+        .speed_mode = LEDC_LOW_SPEED_MODE,   // timer mode
         .duty_resolution = LEDC_TIMER_12_BIT, // resolution of PWM duty
         .timer_num = LEDC_TIMER_0,            // timer index
         .freq_hz = 10000,                     // frequency of PWM signal

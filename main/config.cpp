@@ -15,10 +15,14 @@ extern const uint8_t config_json[]   asm("config_json");
 
 using json = nlohmann::json;
 
-void read_config() {
+Configuration read_config() {
+    ESP_LOGD("CONFIG", "Config input is %s", config_json);
     ESP_LOGI("CONFIG", "Reading config...");
 
-    json config = json::parse(config_json);
+    auto config = Configuration(json::parse(config_json));
 
     ESP_LOGI("CONFIG", "Config is %s", config.dump().c_str());
+
+    return config;
+
 }

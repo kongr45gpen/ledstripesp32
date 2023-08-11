@@ -6,5 +6,6 @@
 
 *.old
 /include/config.h
+/config.json
 
 build

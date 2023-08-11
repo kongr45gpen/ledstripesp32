@@ -9,7 +9,6 @@
 #include "esp_system.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
-#include "cJSON.h"
 #include "config.hpp"
 #include "wifi.hpp"
 #include "mqtt.hpp"
@@ -85,24 +84,9 @@ extern "C" void app_main() {
     ESP_ERROR_CHECK(ret);
 
     config = read_config();
-    // wifi_scan();
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
-
-    // uart_config_t uart_config = {
-    //     .baud_rate = 9600,
-    //     .data_bits = UART_DATA_8_BITS,
-    //     .parity = UART_PARITY_DISABLE,
-    //     .stop_bits = UART_STOP_BITS_1,
-    //     .flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS,
-    //     .rx_flow_ctrl_thresh = 122,
-    // };
-    // // Configure UART parameters
-    // ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
-
-    // char* test_str = "This is a test string.\n";
-    // uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
 
     mqtt_connect();
 

@@ -1,10 +1,13 @@
+#include <string>
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_event.h"
 #include "mqtt_client.h"
 #include "config.h"
+#include "config.hpp"
 #include "nvs_flash.h"
-#include "cJSON.h"
+
+using json = nlohmann::json;
 
 static const char *TAG = "Home App MQTT";
 
@@ -44,33 +47,26 @@ extern TaskHandle_t led_task;
 
 void log_error_if_nonzero(const char * message, int error_code);
 
-cJSON* state_to_json() {
-    cJSON *json = cJSON_CreateObject();
+json state_to_json() {
+    json json_state;
 
     if (state.color_mode == Color_Temp) {
-        cJSON_AddNumberToObject(json, "color_temp", state.color_temperature);
-        cJSON_AddStringToObject(json, "color_mode", "color_temp");
+        json_state["color_temp"] = state.color_temperature;
+        json_state["color_mode"] = "color_temp";
     } else {
-        cJSON *color = cJSON_CreateObject();
-        cJSON_AddNumberToObject(color, "r", state.r);
-        cJSON_AddNumberToObject(color, "g", state.g);
-        cJSON_AddNumberToObject(color, "b", state.b);
-        //cJSON_AddNumberToObject(color, "w", state.ww);
-        //cJSON_AddNumberToObject(color, "c", state.cw);
-
-        cJSON_AddItemToObject(json, "color", color);
-        cJSON_AddStringToObject(json, "color_mode", "rgb");
+        json_state["color"] = {
+            { "r", state.r, },
+            { "g", state.g, },
+            { "b", state.b, },
+            // { "w", state.ww, },
+            // { "c", state.cw, },
+        };
     }
 
-    cJSON_AddNumberToObject(json, "brightness", state.brightness);
+    json_state["brightness"] = state.brightness;
+    json_state["state"] = state.state ? "ON" : "OFF";
 
-    if (state.state) {
-        cJSON_AddStringToObject(json, "state", "ON");
-    } else {
-        cJSON_AddStringToObject(json, "state", "OFF");
-    }
-
-    return json;
+    return json_state;
 }
 
 
@@ -127,12 +123,8 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             }
 
             {
-                cJSON *json = state_to_json();
-                char *json_string = cJSON_Print(json);
-                esp_mqtt_client_publish(client, "esp32/" DEVICE_ID, json_string, 0, 1, 0);
-
-                cJSON_Delete(json);
-                free(json_string);
+                std::string json_string = state_to_json().dump();
+                esp_mqtt_client_publish(client, "esp32/" DEVICE_ID, json_string.c_str(), 0, 1, 0);
             }
 
             esp_mqtt_client_subscribe(client, "esp32/" DEVICE_ID "/set", 1);
@@ -155,73 +147,58 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             break;
         case MQTT_EVENT_DATA: {
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
-            printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-            printf("DATA=%.*s\r\n", event->data_len, event->data);
+            ESP_LOGI(TAG, "TOPIC=%.*s", event->topic_len, event->topic);
+            ESP_LOGI(TAG, "DATA=%.*s", event->data_len, event->data);
 
-            // set
-            cJSON *json = cJSON_Parse(event->data);
+            // TODO: A better way to catch errors here (e.g. incompatible types)
 
-            cJSON *json_state = cJSON_GetObjectItemCaseSensitive(json, "state");
-            if (json_state) {
-                if (strcmp(cJSON_GetStringValue(json_state), "OFF") == 0) {
+            json j = json::parse(event->data, event->data + event->data_len, nullptr, false);
+            if (j.is_discarded()) {
+                ESP_LOGE(TAG, "JSON parsing error. Please provide correct JSON next time.");
+                return ESP_OK;
+            }
+
+            if (j.contains("state")) {
+                if (j["state"] == "OFF") {
                     state.state = 0;
                 } else {
                     state.state = 1;
                 }
             }
 
-            cJSON *brightness = cJSON_GetObjectItemCaseSensitive(json, "brightness");
-            if (brightness) {
-                state.brightness = cJSON_GetNumberValue(brightness);
+            if (j.contains("brightness")) {
+                state.brightness = j["brightness"];
             }
 
-            cJSON *color_mode = cJSON_GetObjectItemCaseSensitive(json, "color_mode");
-            if (color_mode) {
-                if (cJSON_GetStringValue(color_mode)[0] == 'R') {
-                    state.color_mode = RGBWW;
-                } else {
+            if (j.contains("color_mode")) {
+                if (j["color_mode"] == "color_temp") {
                     state.color_mode = Color_Temp;
+                } else {
+                    state.color_mode = RGBWW;
                 }
             }
 
-            cJSON *color_temp = cJSON_GetObjectItemCaseSensitive(json, "color_temp");
-            if (color_temp) {
-                state.color_temperature = cJSON_GetNumberValue(color_temp);
+            if (j.contains("color_temp")) {
+                state.color_temperature = j["color_temp"];
                 state.color_mode = Color_Temp;
             }
 
-            cJSON *color = cJSON_GetObjectItemCaseSensitive(json, "color");
-            if (color) {
-                cJSON *r = cJSON_GetObjectItemCaseSensitive(color, "r");
-                cJSON *g = cJSON_GetObjectItemCaseSensitive(color, "g");
-                cJSON *b = cJSON_GetObjectItemCaseSensitive(color, "b");
-                cJSON *w = cJSON_GetObjectItemCaseSensitive(color, "w");
-                cJSON *c = cJSON_GetObjectItemCaseSensitive(color, "c");
-
-                state.r = cJSON_GetNumberValue(r);
-                state.g = cJSON_GetNumberValue(g);
-                state.b = cJSON_GetNumberValue(b);
-                state.ww = cJSON_GetNumberValue(w);
-                state.cw = cJSON_GetNumberValue(c);
+            if (j.contains("color")) {
+                state.r = j["color"]["r"];
+                state.g = j["color"]["g"];
+                state.b = j["color"]["b"];
+                // state.ww = j["color"]["w"];
+                // state.cw = j["color"]["c"];
 
                 state.color_mode = RGBWW;
             }
 
-            cJSON *transition = cJSON_GetObjectItemCaseSensitive(json, "transition");
-            if (transition) {
-                state.transition = cJSON_GetNumberValue(transition);
+            if (j.contains("transition")) {
+                state.transition = j["transition"];
             }
 
-            cJSON_Delete(json);
-
-            {
-                cJSON *json = state_to_json();
-                char *json_string = cJSON_Print(json);
-                esp_mqtt_client_publish(client, "esp32/" DEVICE_ID, json_string, 0, 1, 0);
-
-                cJSON_Delete(json);
-                free(json_string);
-            }
+            std::string json_string = state_to_json().dump();
+            esp_mqtt_client_publish(client, "esp32/" DEVICE_ID, json_string.c_str(), 0, 1, 0);
 
             xTaskNotify(led_task, 0, eNoAction);
 

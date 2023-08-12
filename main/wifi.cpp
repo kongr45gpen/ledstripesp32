@@ -7,13 +7,11 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_err.h"
-#include "config.h"
+#include "main.hpp"
 #include "config.hpp"
 #include <optional>
 
 #define EXAMPLE_ESP_MAXIMUM_RETRY  5
-
-static const char *TAG = "Home App Wifi";
 
 /* FreeRTOS event group to signal when we are connected*/
 EventGroupHandle_t s_wifi_event_group;
@@ -25,8 +23,6 @@ EventGroupHandle_t s_wifi_event_group;
 #define WIFI_FAIL_BIT      BIT1
 
 static int s_retry_num = 0;
-
-extern std::optional<Configuration> config;
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -97,10 +93,10 @@ void wifi_init_sta(void)
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
-                 ESP_WIFI_SSID, "*********");
+                 wifi_config.sta.ssid, "*********");
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
-                 ESP_WIFI_SSID, "*********");
+                 wifi_config.sta.ssid, "*********");
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }

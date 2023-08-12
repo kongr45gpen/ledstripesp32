@@ -10,6 +10,7 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "config.hpp"
+#include "main.hpp"
 #include "wifi.hpp"
 #include "mqtt.hpp"
 
@@ -22,8 +23,6 @@
 const uart_port_t uart_num = UART_NUM_0;
 
 std::optional<Configuration> config;
-
-static const char *TAG = "Home App";
 
 TaskHandle_t led_task = NULL;
 TaskHandle_t nvs_task = NULL;

@@ -6,29 +6,11 @@
 #include "config.h"
 #include "config.hpp"
 #include "nvs_flash.h"
+#include "main.hpp"
+#include "Light.hpp"
 
 using json = nlohmann::json;
 
-static const char *TAG = "Home App MQTT";
-
-enum Color_Mode {
-    Color_Temp,
-    RGBWW
-};
-
-struct State
-{
-    bool state;
-    uint8_t brightness;
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t ww;
-    uint8_t cw;
-    uint16_t color_temperature;
-    enum Color_Mode color_mode;
-    float transition;
-};
 
 struct State state = {
     .state = 1,
@@ -85,32 +67,23 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             // MQTT device discovery for HomeAssistant
             //
             {
-                const char data[] = " \
-{ \
-    \"brightness\":true, \
-    \"color_mode\":true, \
-    \"command_topic\":\"esp32/" DEVICE_ID "/set\", \
-    \"device\":{ \
-       \"identifiers\":[ \
-          \"esp32_" DEVICE_ID "\" \
-       ], \
-       \"manufacturer\":\"kongr45gpen\", \
-       \"model\":\"ESP32 RGB light, v1\", \
-       \"name\":\"" DEVICE_ID "\", \
-       \"sw_version\":\"ESP32 IDF RGB controller 0.1.1\" \
-    }, \
-    \"json_attributes_topic\":\"esp32/" DEVICE_ID "\", \
-    \"name\":\"" DEVICE_ID "\", \
-    \"schema\":\"json\", \
-    \"state_topic\":\"esp32/" DEVICE_ID "\", \
-    \"supported_color_modes\":[ \
-       \"rgb\"\
-    ], \
-    \"unique_id\":\"" DEVICE_ID "_light_esp32\" \
- } \
-                ";
+                // Iterate over all lights from config->lights()
+                // and create a JSON string for each light.
+                // Then publish the JSON string to the MQTT broker.
+                for (auto& light : config->lights().items()) {
+                    Light<3> light_object(
+                        { 21, 22, 23 },
+                        { Colour::Red, Colour::Green, Colour::Blue }
+                    );
 
-                esp_mqtt_client_publish(client, "homeassistant/light/" DEVICE_ID "/config", data, strlen(data), 1, 1);
+                    light_object.create_homeassistant_configuration(light.key(), light.value());
+                }
+
+                // Light<3> light;
+                // light.create_homeassistant_configuration("ESP32", state_to_json());
+
+
+                // esp_mqtt_client_publish(client, "homeassistant/light/" DEVICE_ID "/config", data, strlen(data), 1, 1);
             }
 
             //
@@ -228,8 +201,6 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
     return ESP_OK;
 }
 
-
-
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     mqtt_event_handler_cb((esp_mqtt_event_handle_t) event_data);
@@ -238,7 +209,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 void mqtt_connect() {
     esp_mqtt_client_config_t mqtt_cfg;
     memset(&mqtt_cfg, 0, sizeof(mqtt_cfg));
-    mqtt_cfg.broker.address.uri =  "mqtt://home";
+    mqtt_cfg.broker.address.uri =  config->mqtt_host().c_str();
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_register_event(client, (esp_mqtt_event_id_t) ESP_EVENT_ANY_ID, mqtt_event_handler, client);
     esp_mqtt_client_start(client);

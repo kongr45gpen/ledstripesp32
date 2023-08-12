@@ -1,6 +1,9 @@
 #pragma once
 
+#include "esp_log.h"
 #include "esp_wifi_types.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <utility>
 
 #ifdef CONFIG_IDF_TARGET
@@ -9,6 +12,7 @@
 #define JSON_THROW_USER(exception)                           \
     {\
         ESP_LOGE("JSON", "Error in %s:%d (function %s) - %s", __FILE__, __LINE__, __FUNCTION__, (exception).what());\
+        vTaskDelay(100);\
         abort();\
     }
 #endif
@@ -67,6 +71,14 @@ public:
         wifi_config.sta.threshold.authmode = auth_mode;
         
         return wifi_config;
+    }
+
+    std::string mqtt_host() {
+        return json.at("mqtt").at("host");
+    }
+
+    nlohmann::json::reference lights() {
+        return json.at("lights");
     }
 
     std::string dump() {

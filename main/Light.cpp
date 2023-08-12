@@ -2,6 +2,41 @@
 #include "Light.hpp"
 
 template <int Pin_Count>
+nlohmann::json Light<Pin_Count>::create_homeassistant_configuration(const std::string& device_name, const nlohmann::json& device) {
+    ESP_LOGD("LED", "Generating HomeAssistant configuration for %s", device_name.c_str());
+    ESP_LOGD("LED", "Device JSON is %s", device.dump().c_str());
+
+    if (device["pins"].size() != Pin_Count) {
+        ESP_LOGE("LED", "Device %s has %d pins, but %d were expected", device_name.c_str(), device["pins"].size(), Pin_Count);
+        return {};
+    }
+
+    pins = device["pins"];
+
+    nlohmann::json j;
+    j["brightness"] = true;
+    j["color_mode"] = true;
+    j["command_topic"] = "esp32/";
+    j["device"] = {
+        { "identifiers", device_name },
+        { "manufacturer", "kongr45gpen" },
+        { "model", CONFIG_IDF_TARGET " light, v1" },
+        { "name", device_name },
+        { "sw_version", "ESP32 IDF LED controller 0.2.1" },
+    };
+    j["json_attributes_topic"] = "esp32/" + device_name;
+    j["name"] = device_name;
+    j["schema"] = "json";
+    j["state_topic"] = "esp32/" + device_name;
+    j["supported_color_modes"] = { "rgb" }; //TODO
+    j["unique_id"] = device_name + "_light_esp32";
+
+    ESP_LOGI("LED", "Generated HomeAssistant configuration for %s: %s", device_name.c_str(), j.dump().c_str());
+
+    return j;
+}
+
+template <int Pin_Count>
 ledc_channel_config_t Light<Pin_Count>::generate_led_configuration(int index) {
     ledc_channel_config_t config = {
         .gpio_num = pins[index],

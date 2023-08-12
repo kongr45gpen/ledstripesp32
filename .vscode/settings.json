@@ -1,6 +1,12 @@
 {
     "cmake.configureOnOpen": false,
     "files.associations": {
-        "esp_system.h": "c"
-    }
+        "esp_system.h": "c",
+        "any": "cpp",
+        "optional": "cpp",
+        "system_error": "cpp",
+        "array": "cpp",
+        "string_view": "cpp"
+    },
+    "idf.adapterTargetName": "esp32c6"
 }

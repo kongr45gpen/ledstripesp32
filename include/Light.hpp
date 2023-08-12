@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <optional>
 #include "driver/ledc.h"
+#include "config.hpp"
+#include "nlohmann/json.hpp"
 
 /**
  * TODO REMOVE THESE
@@ -76,6 +78,11 @@ public:
             ledc_channels[i] = generate_led_configuration(i);
         }
     };
+
+    /**
+     * Create a JSON specification for this light, to be sent through MQTT to homeassistant
+     */
+    nlohmann::json create_homeassistant_configuration(const std::string& device_name, const nlohmann::json& device);
 
     /**
      * Initialise the ESP32 peripherals, including timers and channels

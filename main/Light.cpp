@@ -12,6 +12,7 @@ nlohmann::json Light::create_homeassistant_configuration(const std::string& devi
         }
         pins = device["pins"].get<std::vector<uint8_t>>();
         colours = { Colour::Red, Colour::Green, Colour::Blue };
+        gamma = device.value("gamma", 4.f);
     } else {
         ESP_LOGE("LED", "Device %s has unknown type %s", device_name.c_str(), device["type"].get<std::string>().c_str());
         return {};

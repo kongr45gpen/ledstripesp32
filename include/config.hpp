@@ -73,6 +73,10 @@ public:
         return wifi_config;
     }
 
+    std::string_view hostname() {
+        return json.at("wifi").value("hostname", "espressif");
+    }
+
     std::string mqtt_host() {
         return json.at("mqtt").at("host");
     }

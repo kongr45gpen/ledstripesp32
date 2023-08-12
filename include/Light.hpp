@@ -45,7 +45,7 @@ class Light
     std::vector<uint8_t> pins;
     std::vector<Colour> colours;
 
-    float gamma = 4;
+    float gamma;
 
     std::vector<ledc_channel_config_t> ledc_channels;
 
@@ -91,7 +91,7 @@ public:
 
     State state = {
         .state = 1,
-        .brightness = 100,
+        .brightness = 255,
         .r = 255,
         .g = 255,
         .b = 255,

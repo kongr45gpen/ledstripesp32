@@ -24,15 +24,17 @@ json state_to_json(const Light& light) {
     if (state.color_mode == Color_Temp) {
         json_state["color_temp"] = state.color_temperature;
         json_state["color_mode"] = "color_temp";
-    } else {
+    } else if (state.color_mode == RGB) {
         json_state["color"] = {
             { "r", state.r, },
             { "g", state.g, },
             { "b", state.b, },
-            // { "w", state.ww, },
-            // { "c", state.cw, },
         };
         json_state["color_mode"] = "rgb";
+    } else if (state.color_mode == Brightness) {
+        json_state["color_mode"] = "brightness";
+    } else {
+        ESP_LOGW(TAG, "Unknown color mode %d", state.color_mode);
     }
 
     json_state["brightness"] = state.brightness;
@@ -55,9 +57,8 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
             // MQTT device discovery for HomeAssistant
             for (const auto& [key, light] : Light::all_lights) {
-
                 auto homeassistant_topic = std::string("homeassistant/light/") + key + "/config";
-                esp_mqtt_client_publish(client, homeassistant_topic.c_str(), data, strlen(data), 1, 1);
+                esp_mqtt_client_publish(client, homeassistant_topic.c_str(), light.get_homeassistant_configuration().dump().c_str(), 0, 1, 1);
 
                 auto state_topic = std::string("esp32/") + key;
                 esp_mqtt_client_publish(client, state_topic.c_str(), state_to_json(light).dump().c_str(), 0, 1, 0);
@@ -126,7 +127,7 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 if (j["color_mode"] == "color_temp") {
                     state.color_mode = Color_Temp;
                 } else {
-                    state.color_mode = RGBWW;
+                    state.color_mode = RGB;
                 }
             }
 
@@ -142,7 +143,7 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 // state.ww = j["color"]["w"];
                 // state.cw = j["color"]["c"];
 
-                state.color_mode = RGBWW;
+                state.color_mode = RGB;
             }
 
             if (j.contains("transition")) {

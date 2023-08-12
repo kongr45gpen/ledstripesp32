@@ -8,13 +8,12 @@
 #include "config.hpp"
 #include "nlohmann/json.hpp"
 
-/**
- * TODO REMOVE THESE
- **/
 enum Color_Mode
 {
+    Brightness,
     Color_Temp,
-    RGBWW
+    RGB,
+    RGBWW,
 };
 
 struct State
@@ -42,6 +41,8 @@ enum class Colour
 
 class Light
 {
+    inline static uint8_t current_pwm_channel = 0;
+
     std::vector<uint8_t> pins;
     std::vector<Colour> colours;
 
@@ -69,13 +70,17 @@ class Light
     ledc_channel_config_t generate_led_configuration(int index);
 
     bool is_modified = false;
+
+    nlohmann::json hass_configuration;
 public:
     Light() = default;
 
     /**
      * Create a JSON specification for this light, to be sent through MQTT to homeassistant
      */
-    nlohmann::json create_homeassistant_configuration(const std::string& device_name, const nlohmann::json& device);
+    void create_homeassistant_configuration(const std::string& device_name, const nlohmann::json& device);
+
+    const nlohmann::json& get_homeassistant_configuration() const;
 
     /**
      * Initialise the ESP32 peripherals, including timers and channels

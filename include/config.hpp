@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_wifi_types.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -75,6 +76,19 @@ public:
 
     std::string_view hostname() {
         return json.at("wifi").value("hostname", "espressif");
+    }
+
+    std::string unique_id() {
+        if (json.at("wifi").contains("hostname")) {
+            return json["wifi"]["hostname"];
+        } else {
+            uint8_t mac[6];
+            char mac_str[30];
+            esp_efuse_mac_get_default(mac);
+            sprintf(mac_str, "esp32_led_%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2],
+                    mac[3], mac[4], mac[5]);
+            return std::string(mac_str);
+        }
     }
 
     std::string mqtt_host() {

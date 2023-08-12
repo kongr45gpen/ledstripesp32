@@ -88,6 +88,19 @@ extern "C" void app_main() {
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
 
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,   // timer mode
+        .duty_resolution = LEDC_TIMER_12_BIT, // resolution of PWM duty
+        .timer_num = LEDC_TIMER_0,            // timer index
+        .freq_hz = 10000,                     // frequency of PWM signal
+        .clk_cfg = LEDC_AUTO_CLK,             // Auto select the source clock
+    };
+    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+    ESP_LOGI("LED", "LED timer configured");
+
+    ESP_ERROR_CHECK(ledc_fade_func_install(0));
+    ESP_LOGD("LED", "LED fade configured");  
+
     for (auto& light : config->lights().items()) {
         Light& light_object = Light::all_lights[light.key()];
 
@@ -96,7 +109,7 @@ extern "C" void app_main() {
 
     mqtt_connect();
 
-    xTaskCreate(&led_blink,"LED_BLINK",2048,NULL,5,&led_task);
+    xTaskCreate(&led_blink,"LED_BLINK",4096,NULL,5,&led_task);
     //xTaskCreate(&nvs_manager,"NVS_MANAGER",2048,NULL,3,&nvs_task);
     // vTaskStartScheduler();
 

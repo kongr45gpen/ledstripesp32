@@ -13,6 +13,7 @@
 #include "main.hpp"
 #include "wifi.hpp"
 #include "mqtt.hpp"
+#include "Light.hpp"
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
@@ -86,6 +87,12 @@ extern "C" void app_main() {
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
+
+    for (auto& light : config->lights().items()) {
+        Light& light_object = Light::all_lights[light.key()];
+
+        light_object.create_homeassistant_configuration(light.key(), light.value());
+    }
 
     mqtt_connect();
 

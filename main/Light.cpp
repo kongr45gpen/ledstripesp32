@@ -1,17 +1,23 @@
 #include "esp_log.h"
 #include "Light.hpp"
 
-template <int Pin_Count>
-nlohmann::json Light<Pin_Count>::create_homeassistant_configuration(const std::string& device_name, const nlohmann::json& device) {
+nlohmann::json Light::create_homeassistant_configuration(const std::string& device_name, const nlohmann::json& device) {
     ESP_LOGD("LED", "Generating HomeAssistant configuration for %s", device_name.c_str());
     ESP_LOGD("LED", "Device JSON is %s", device.dump().c_str());
 
-    if (device["pins"].size() != Pin_Count) {
-        ESP_LOGE("LED", "Device %s has %d pins, but %d were expected", device_name.c_str(), device["pins"].size(), Pin_Count);
+    if (device["type"] == "rgb") {
+        if (device["pins"].size() != 3) {
+            ESP_LOGE("LED", "Device %s has %d pins, but RGB devices must have 3 pins", device_name.c_str(), device["pins"].size());
+            return {};
+        }
+        pins = device["pins"].get<std::vector<uint8_t>>();
+        colours = { Colour::Red, Colour::Green, Colour::Blue };
+    } else {
+        ESP_LOGE("LED", "Device %s has unknown type %s", device_name.c_str(), device["type"].get<std::string>().c_str());
         return {};
     }
 
-    pins = device["pins"];
+    auto topic = "esp32/" + device_name;
 
     nlohmann::json j;
     j["brightness"] = true;
@@ -24,20 +30,24 @@ nlohmann::json Light<Pin_Count>::create_homeassistant_configuration(const std::s
         { "name", device_name },
         { "sw_version", "ESP32 IDF LED controller 0.2.1" },
     };
-    j["json_attributes_topic"] = "esp32/" + device_name;
+    j["json_attributes_topic"] = topic;
     j["name"] = device_name;
     j["schema"] = "json";
-    j["state_topic"] = "esp32/" + device_name;
+    j["state_topic"] = topic;
     j["supported_color_modes"] = { "rgb" }; //TODO
     j["unique_id"] = device_name + "_light_esp32";
 
     ESP_LOGI("LED", "Generated HomeAssistant configuration for %s: %s", device_name.c_str(), j.dump().c_str());
 
+    ledc_channels.resize(pins.size());
+    for (int i = 0; i < pins.size(); i++) {
+        ledc_channels[i] = generate_led_configuration(i);
+    }
+
     return j;
 }
 
-template <int Pin_Count>
-ledc_channel_config_t Light<Pin_Count>::generate_led_configuration(int index) {
+ledc_channel_config_t Light::generate_led_configuration(int index) {
     ledc_channel_config_t config = {
         .gpio_num = pins[index],
         .speed_mode = LEDC_LOW_SPEED_MODE,
@@ -52,8 +62,7 @@ ledc_channel_config_t Light<Pin_Count>::generate_led_configuration(int index) {
     return config;
 }
 
-template <int Pin_Count>
-void Light<Pin_Count>::initialise() {
+void Light::initialise() {
     ESP_LOGI("MAIN", "Configuring LED timer...");
 
     ledc_timer_config_t ledc_timer = {
@@ -76,14 +85,13 @@ void Light<Pin_Count>::initialise() {
     ESP_ERROR_CHECK(ledc_fade_func_install(0));
     ESP_LOGD("LED", "LED fade configured");  
 
-    ESP_LOGI("LED", "%d-pin LED initialised", Pin_Count);
+    ESP_LOGI("LED", "%d-pin LED initialised", pins.size());
 }
 
-template <int Pin_Count>
-void Light<Pin_Count>::render(State state) {
-    uint16_t duty[Pin_Count] = { 0 };
+void Light::render() {
+    std::vector<uint16_t> duty(pins.size());
 
-    for (int i = 0; i < Pin_Count; i++) {
+    for (int i = 0; i < pins.size(); i++) {
         if (state.state != 0) {
             if (i == 0) duty[i] = state.r * state.brightness / 255.f;
             if (i == 1) duty[i] = state.g * state.brightness / 255.f;
@@ -94,6 +102,8 @@ void Light<Pin_Count>::render(State state) {
         }
     }
 
+    // Print avaialble heap space
+    ESP_LOGD("LED", "Heap free: %d", esp_get_free_heap_size());
     ESP_LOGD("LED", "Brightness output %d %d %d [gamma = %f]", duty[0], duty[1], duty[2], gamma);
 
     if (state.transition != 0) {
@@ -103,7 +113,7 @@ void Light<Pin_Count>::render(State state) {
 
         ESP_LOGD("LED", "Starting transition [%f s]", state.transition);
 
-        for (int i = 0; i < Pin_Count; i++) {
+        for (int i = 0; i < pins.size(); i++) {
             ledc_set_fade_with_time(
                 ledc_channels[i].speed_mode,
                 ledc_channels[i].channel,
@@ -112,7 +122,7 @@ void Light<Pin_Count>::render(State state) {
             ledc_fade_start(
                 ledc_channels[i].speed_mode, 
                 ledc_channels[i].channel, 
-                i == (Pin_Count - 1) ? LEDC_FADE_WAIT_DONE : LEDC_FADE_NO_WAIT);
+                i == (pins.size() - 1) ? LEDC_FADE_WAIT_DONE : LEDC_FADE_NO_WAIT);
         }
 
         ESP_LOGD("LED", "Transition complete");
@@ -124,4 +134,3 @@ void Light<Pin_Count>::render(State state) {
     }
 }
 
-template class Light<3>;

@@ -4,15 +4,16 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-extern State state;
-
 extern "C" void led_blink(void *pvParams) {
-    Light<3> light({LED_PIN, LED2_PIN, LED3_PIN}, {Colour::Red, Colour::Green, Colour::Blue});
-
-    light.initialise();
+    for (auto &light : Light::all_lights) {
+        light.second.initialise();
+    }
 
     while (true) {
-        light.render(state);
+        for (auto &light : Light::all_lights) {
+            // TODO: Only render lights that have changes
+            light.second.render();
+        }
 
         xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
     }

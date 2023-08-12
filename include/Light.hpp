@@ -40,15 +40,14 @@ enum class Colour
     Cold_White
 };
 
-template <int Pin_Count>
 class Light
 {
-    std::array<uint8_t, Pin_Count> pins;
-    std::array<Colour, Pin_Count> colours;
+    std::vector<uint8_t> pins;
+    std::vector<Colour> colours;
 
     float gamma = 4;
 
-    std::array<ledc_channel_config_t, Pin_Count> ledc_channels;
+    std::vector<ledc_channel_config_t> ledc_channels;
 
     /**
      * Applies gamma correction to a single value.
@@ -69,15 +68,9 @@ class Light
      */
     ledc_channel_config_t generate_led_configuration(int index);
 
+    bool is_modified = false;
 public:
-    // Implemented constructor
-    Light(std::array<uint8_t, Pin_Count> pins, std::array<Colour, Pin_Count> colours)
-        : pins(pins), colours(colours)
-    {
-        for (int i = 0; i < Pin_Count; i++) {
-            ledc_channels[i] = generate_led_configuration(i);
-        }
-    };
+    Light() = default;
 
     /**
      * Create a JSON specification for this light, to be sent through MQTT to homeassistant
@@ -92,5 +85,20 @@ public:
     /**
      * Render the output of the LED, as part of the FreeRTOS task loop
      */
-    void render(State state);
+    void render();
+
+    inline static std::map<std::string, Light> all_lights;
+
+    State state = {
+        .state = 1,
+        .brightness = 100,
+        .r = 255,
+        .g = 255,
+        .b = 255,
+        .ww = 0,
+        .cw = 0,
+        .color_temperature = 400,
+        .color_mode = Color_Temp,
+        .transition = 0.1,
+    };
 };

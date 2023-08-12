@@ -12,24 +12,13 @@
 using json = nlohmann::json;
 
 
-struct State state = {
-    .state = 1,
-    .brightness = 100,
-    .r = 255,
-    .g = 255,
-    .b = 255,
-    .ww = 0,
-    .cw = 0,
-    .color_temperature = 400,
-    .color_mode = Color_Temp,
-    .transition = 0.1,
-};
-
 extern TaskHandle_t led_task;
 
 void log_error_if_nonzero(const char * message, int error_code);
 
-json state_to_json() {
+json state_to_json(const Light& light) {
+    const auto& state = light.state;
+
     json json_state;
 
     if (state.color_mode == Color_Temp) {
@@ -43,6 +32,7 @@ json state_to_json() {
             // { "w", state.ww, },
             // { "c", state.cw, },
         };
+        json_state["color_mode"] = "rgb";
     }
 
     json_state["brightness"] = state.brightness;
@@ -51,56 +41,30 @@ json state_to_json() {
     return json_state;
 }
 
-
 esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 {
+    using namespace std::literals;
+
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
+    const char data[] = "ON";
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            // msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
-            // ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
-            //
             // MQTT device discovery for HomeAssistant
-            //
-            {
-                // Iterate over all lights from config->lights()
-                // and create a JSON string for each light.
-                // Then publish the JSON string to the MQTT broker.
-                for (auto& light : config->lights().items()) {
-                    Light<3> light_object(
-                        { 21, 22, 23 },
-                        { Colour::Red, Colour::Green, Colour::Blue }
-                    );
+            for (const auto& [key, light] : Light::all_lights) {
 
-                    light_object.create_homeassistant_configuration(light.key(), light.value());
-                }
+                auto homeassistant_topic = std::string("homeassistant/light/") + key + "/config";
+                esp_mqtt_client_publish(client, homeassistant_topic.c_str(), data, strlen(data), 1, 1);
 
-                // Light<3> light;
-                // light.create_homeassistant_configuration("ESP32", state_to_json());
+                auto state_topic = std::string("esp32/") + key;
+                esp_mqtt_client_publish(client, state_topic.c_str(), state_to_json(light).dump().c_str(), 0, 1, 0);
 
-
-                // esp_mqtt_client_publish(client, "homeassistant/light/" DEVICE_ID "/config", data, strlen(data), 1, 1);
+                auto command_topic = std::string("esp32/") + key + "/set";
+                esp_mqtt_client_subscribe(client, command_topic.c_str(), 1);
             }
-
-            //
-            // MQTT set state to ON for HomeAssistant
-            //
-            {
-                const char data[] = "ON";
-                // TODO: Set retain to OFF (?) and re_trigger
-                esp_mqtt_client_publish(client, "homeassistant/light/" DEVICE_ID "/state", data, strlen(data), 1, 1);
-            }
-
-            {
-                std::string json_string = state_to_json().dump();
-                esp_mqtt_client_publish(client, "esp32/" DEVICE_ID, json_string.c_str(), 0, 1, 0);
-            }
-
-            esp_mqtt_client_subscribe(client, "esp32/" DEVICE_ID "/set", 1);
 
             break;
         case MQTT_EVENT_DISCONNECTED:
@@ -123,6 +87,8 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             ESP_LOGI(TAG, "TOPIC=%.*s", event->topic_len, event->topic);
             ESP_LOGI(TAG, "DATA=%.*s", event->data_len, event->data);
 
+            std::string_view topic(event->topic, event->topic_len);
+
             // TODO: A better way to catch errors here (e.g. incompatible types)
 
             json j = json::parse(event->data, event->data + event->data_len, nullptr, false);
@@ -130,6 +96,19 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 ESP_LOGE(TAG, "JSON parsing error. Please provide correct JSON next time.");
                 return ESP_OK;
             }
+
+            std::string_view query(topic);
+            query.remove_prefix(6); // remove "esp32/"
+            query.remove_suffix(4); // remove "/set"
+
+            auto light = Light::all_lights.find(std::string(query));
+
+            if (light == Light::all_lights.end()) {
+                ESP_LOGE(TAG, "Light not found: %s", query.data());
+                return ESP_OK;
+            }
+
+            auto& state = light->second.state;
 
             if (j.contains("state")) {
                 if (j["state"] == "OFF") {
@@ -170,7 +149,8 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 state.transition = j["transition"];
             }
 
-            std::string json_string = state_to_json().dump();
+            std::string json_string = state_to_json(light->second).dump();
+            ESP_LOGD("LED", "JSON: %s", json_string.c_str());
             esp_mqtt_client_publish(client, "esp32/" DEVICE_ID, json_string.c_str(), 0, 1, 0);
 
             xTaskNotify(led_task, 0, eNoAction);

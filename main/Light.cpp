@@ -15,14 +15,22 @@ void Light::create_homeassistant_configuration(const std::string& device_name, c
         }
         pins = device["pins"].get<std::vector<uint8_t>>();
         colours = { Colour::Red, Colour::Green, Colour::Blue };
-        gamma = device.value("gamma", 4.f);
 
         homeassistant_color_mode = "rgb";
         state.color_mode = Color_Mode::RGB;
+    } else if (device["type"] == "rgbww") {
+        if (device["pins"].size() != 5) {
+            ESP_LOGE("LED", "Device %s has %d pins, but RGBWWCW devices must have 5 pins", device_name.c_str(), device["pins"].size());
+            return;
+        }
+        pins = device["pins"].get<std::vector<uint8_t>>();
+        colours = { Colour::Red, Colour::Green, Colour::Blue, Colour::Warm_White, Colour::Cold_White };
+
+        homeassistant_color_mode = "rgbww";
+        state.color_mode = Color_Mode::RGBWWCW;
     } else if (device["type"] == "dimmer") {
         pins = { device["pin"] };
         colours = { Colour::Warm_White };
-        gamma = device.value("gamma", 4.f);
 
         homeassistant_color_mode = "brightness";
         state.color_mode = Color_Mode::Brightness;
@@ -30,6 +38,8 @@ void Light::create_homeassistant_configuration(const std::string& device_name, c
         ESP_LOGE("LED", "Device %s has unknown type %s", device_name.c_str(), device["type"].get<std::string>().c_str());
         return;
     }
+
+    gamma = device.value("gamma", 4.f);
 
     auto topic = "esp32/" + device_name;
 
@@ -92,10 +102,12 @@ void Light::render() {
 
     for (int i = 0; i < pins.size(); i++) {
         if (state.state != 0) {
-            if (pins.size() == 3) {
+            if (pins.size() >= 3) {
                 if (i == 0) duty[i] = state.r * state.brightness / 255.f;
                 if (i == 1) duty[i] = state.g * state.brightness / 255.f;
                 if (i == 2) duty[i] = state.b * state.brightness / 255.f;
+                if (i == 3) duty[i] = state.ww * state.brightness / 255.f;
+                if (i == 4) duty[i] = state.cw * state.brightness / 255.f;
             } else {
                 duty[i] = state.brightness;
             }

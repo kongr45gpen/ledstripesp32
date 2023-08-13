@@ -1,0 +1,23 @@
+{
+    "wifi": {
+        "ssid": "SSID",
+        "password": "Password",
+        "auth": "WPA2_PSK",
+        "hostname": "esp32c6_2"
+    },
+    "mqtt": {
+        "host": "mqtt://home"
+    },
+    "lights": {
+        "esp32c6_test": {
+            "type": "rgb",
+            "pins": [ 21, 22, 23 ],
+            "gamma": 2
+        },
+        "esp32c6_test2": {
+            "type": "dimmer",
+            "pin": 1,
+            "gamma": 2
+        }
+    }
+}     

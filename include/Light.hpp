@@ -13,7 +13,8 @@ enum Color_Mode
     Brightness,
     Color_Temp,
     RGB,
-    RGBWW,
+    RGBW,
+    RGBWWCW,
 };
 
 struct State

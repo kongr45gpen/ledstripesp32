@@ -31,6 +31,23 @@ json state_to_json(const Light& light) {
             { "b", state.b, },
         };
         json_state["color_mode"] = "rgb";
+    } else if (state.color_mode == RGBW) {
+        json_state["color"] = {
+            { "r", state.r, },
+            { "g", state.g, },
+            { "b", state.b, },
+            { "w", state.ww, },
+        };
+        json_state["color_mode"] = "rgbw";
+    } else if (state.color_mode == RGBWWCW) {
+        json_state["color"] = {
+            { "r", state.r, },
+            { "g", state.g, },
+            { "b", state.b, },
+            { "w", state.ww, },
+            { "c", state.cw, },
+        };
+        json_state["color_mode"] = "rgbww";
     } else if (state.color_mode == Brightness) {
         json_state["color_mode"] = "brightness";
     } else {
@@ -126,8 +143,16 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             if (j.contains("color_mode")) {
                 if (j["color_mode"] == "color_temp") {
                     state.color_mode = Color_Temp;
-                } else {
+                } else if (j["color_mode"] == "rgb") {
                     state.color_mode = RGB;
+                } else if (j["color_mode"] == "rgbw") {
+                    state.color_mode = RGBW;
+                } else if (j["color_mode"] == "rgbww") {
+                    state.color_mode = RGBWWCW;
+                } else if (j["color_mode"] == "brightness") {
+                    state.color_mode = Brightness;
+                } else {
+                    ESP_LOGW(TAG, "Unknown color mode received in MQTT: %s", j["color_mode"].get<std::string>().c_str());
                 }
             }
 
@@ -140,10 +165,16 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
                 state.r = j["color"]["r"];
                 state.g = j["color"]["g"];
                 state.b = j["color"]["b"];
-                // state.ww = j["color"]["w"];
-                // state.cw = j["color"]["c"];
-
                 state.color_mode = RGB;
+
+                if (j["color"].contains("w")) {
+                    state.ww = j["color"]["w"];
+                    state.color_mode = RGBW;
+                }
+                if (j["color"].contains("c")) {
+                    state.cw = j["color"]["c"];
+                    state.color_mode = RGBWWCW;
+                }
             }
 
             if (j.contains("transition")) {

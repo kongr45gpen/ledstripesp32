@@ -1,6 +1,5 @@
 #include "Light.hpp"
 #include "tasks.h"
-#include "config.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 

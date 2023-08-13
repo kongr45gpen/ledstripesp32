@@ -3,7 +3,6 @@
 #include "esp_system.h"
 #include "esp_event.h"
 #include "mqtt_client.h"
-#include "config.h"
 #include "config.hpp"
 #include "nvs_flash.h"
 #include "main.hpp"
@@ -66,7 +65,6 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
-    const char data[] = "ON";
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
@@ -183,7 +181,8 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
             std::string json_string = state_to_json(light->second).dump();
             ESP_LOGD("LED", "JSON: %s", json_string.c_str());
-            esp_mqtt_client_publish(client, "esp32/" DEVICE_ID, json_string.c_str(), 0, 1, 0);
+            auto status_topic = std::string("esp32/") + light->first;
+            esp_mqtt_client_publish(client, status_topic.c_str(), json_string.c_str(), 0, 1, 0);
 
             xTaskNotify(led_task, 0, eNoAction);
 

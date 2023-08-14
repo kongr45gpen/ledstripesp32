@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <atomic>
 #include "driver/ledc.h"
 #include "config.hpp"
 #include "nlohmann/json.hpp"
@@ -73,6 +74,8 @@ class Light
     bool is_modified = false;
 
     nlohmann::json hass_configuration;
+
+    std::array<std::atomic<float>, 6> current_brightness = { 0 };
 public:
     Light() = default;
 
@@ -92,6 +95,20 @@ public:
      * Render the output of the LED, as part of the FreeRTOS task loop
      */
     void render();
+
+    /**
+     * Get an array of the current brightnesses of each output
+     */
+    const std::array<std::atomic<float>, 6>& get_current_brightness() const {
+        return current_brightness;
+    }
+
+    /**
+     * How many pins does the light have?
+     */
+    int count_pins() {
+        return pins.size();
+    }
 
     inline static std::map<std::string, Light> all_lights;
 

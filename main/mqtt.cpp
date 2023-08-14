@@ -15,7 +15,7 @@ extern TaskHandle_t led_task;
 
 void log_error_if_nonzero(const char * message, int error_code);
 
-json state_to_json(const Light& light) {
+static json state_to_json(const Light& light) {
     const auto& state = light.state;
 
     json json_state;
@@ -64,7 +64,6 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
     using namespace std::literals;
 
     esp_mqtt_client_handle_t client = event->client;
-    int msg_id;
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
@@ -84,13 +83,10 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
             break;
         case MQTT_EVENT_DISCONNECTED:
-            ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+            ESP_LOGE(TAG, "MQTT_EVENT_DISCONNECTED");
             break;
-
         case MQTT_EVENT_SUBSCRIBED:
             ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-            msg_id = esp_mqtt_client_publish(client, "/topic/qos0", "data", 0, 0, 0);
-            ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
             break;
         case MQTT_EVENT_UNSUBSCRIBED:
             ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);

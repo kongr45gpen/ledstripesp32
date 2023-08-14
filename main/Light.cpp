@@ -39,6 +39,11 @@ void Light::create_homeassistant_configuration(const std::string& device_name, c
         return;
     }
 
+    if (pins.size() > current_brightness.max_size()) {
+        ESP_LOGE("LED", "Device %s has %d pins, but max %d are supported", device_name.c_str(), pins.size(), current_brightness.max_size());
+        return;
+    }
+
     gamma = device.value("gamma", 4.f);
 
     auto topic = "esp32/" + device_name;
@@ -111,9 +116,19 @@ void Light::render() {
             } else {
                 duty[i] = state.brightness;
             }
+            
+            if (i < current_brightness.size()) [[likely]] {
+                current_brightness[i] = duty[i];
+            }
+            ESP_LOGD("LED", "Raw brt [%d] = %.1f", i, duty[i]);
+
             duty[i] = static_cast<uint16_t>(gamma_correction(duty[i]));
         } else {
             duty[i] = 0;
+
+            if (i < current_brightness.size()) [[likely]] {
+                current_brightness[i] = duty[i];
+            }
         }
     }
 
@@ -124,7 +139,7 @@ void Light::render() {
         duty_string += std::to_string(d) + " ";
     }
     duty_string += "[gamma = " + std::to_string(gamma) + "]";
-    ESP_LOGD("LED", "%s", duty_string.c_str());
+    ESP_LOGI("LED", "%s", duty_string.c_str());
 
     if (state.transition != 0) {
         // Sanity checks

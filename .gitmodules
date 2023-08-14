@@ -4,6 +4,3 @@
 [submodule "lib/json"]
 	path = lib/json
 	url = https://github.com/nlohmann/json.git
-[submodule "lib/ssd1306"]
-	path = lib/ssd1306
-	url = https://github.com/ThingPulse/esp8266-oled-ssd1306.git

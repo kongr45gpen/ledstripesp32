@@ -3,7 +3,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-extern "C" void led_blink(void *pvParams) {
+void led_blink(void *pvParams) {
     for (auto &light : Light::all_lights) {
         light.second.initialise();
     }
@@ -15,5 +15,11 @@ extern "C" void led_blink(void *pvParams) {
         }
 
         xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
+    }
+}
+
+void display_update(void *pvParams) {
+    while (true) {
+        vTaskDelay(1000);
     }
 }

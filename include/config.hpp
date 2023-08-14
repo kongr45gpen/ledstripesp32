@@ -1,5 +1,6 @@
 #pragma once
 
+#include "driver/i2c.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_wifi_types.h"
@@ -74,7 +75,11 @@ public:
         return wifi_config;
     }
 
-    std::string_view hostname() {
+    std::string_view ssid() {
+        return json.at("wifi").at("ssid").get<std::string_view>();
+    }
+
+    std::string hostname() {
         return json.at("wifi").value("hostname", "espressif");
     }
 
@@ -101,6 +106,22 @@ public:
 
     std::string dump() {
         return json.dump();
+    }
+
+    bool has_display() {
+        return json.contains("display");
+    }
+
+    i2c_config_t get_display_i2c_config() {
+        i2c_config_t conf;
+        memset(&conf, 0, sizeof(conf));
+        conf.mode = I2C_MODE_MASTER;
+        conf.sda_io_num = json.at("display").at("sda");
+        conf.scl_io_num = json.at("display").at("scl");
+        conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
+        conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
+        conf.master.clk_speed = 100000;
+        return conf;
     }
 };
 

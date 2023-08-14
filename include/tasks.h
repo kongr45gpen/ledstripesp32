@@ -1,9 +1,4 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
+#pragma once
 
 void led_blink(void *pvParams);
-
-#ifdef __cplusplus
-}
-#endif
+void display_update(void *pvParams);

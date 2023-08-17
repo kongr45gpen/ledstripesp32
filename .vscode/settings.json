@@ -65,7 +65,13 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp",
         "valarray": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "gpio_periph.h": "c",
+        "freertos.h": "c",
+        "esp_types.h": "c",
+        "esp_check.h": "c",
+        "ledc_periph.h": "c",
+        "esp_rom_gpio.h": "c"
     },
-    "idf.adapterTargetName": "esp32c6"
+    "idf.adapterTargetName": "esp32"
 }

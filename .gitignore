@@ -9,6 +9,7 @@
 /config.json
 
 build
+/build*
 
 # VSCode
 .vscode/*

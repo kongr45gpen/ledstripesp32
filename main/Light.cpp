@@ -141,23 +141,35 @@ void Light::render() {
     duty_string += "[gamma = " + std::to_string(gamma) + "]";
     ESP_LOGI("LED", "%s", duty_string.c_str());
 
-    if (state.transition != 0) {
+    if (state.transition > 0) {
         // Sanity checks
         if (state.transition > 3) state.transition = 3;
-        if (state.transition < 0) state.transition = 0;
 
         ESP_LOGD("LED", "Starting transition [%f s]", state.transition);
 
+        // Workaround issue with transitioning between maximum duty cycles
+#if defined(CONFIG_IDF_TARGET_ESP32) 
         for (int i = 0; i < pins.size(); i++) {
-            ledc_set_fade_with_time(
+            auto current_duty = ledc_get_duty(ledc_channels[i].speed_mode, ledc_channels[i].channel);
+            ESP_LOGD("LED", "[%d] Current duty cycle for pin %d is %ld", i, pins[i], current_duty);
+            constexpr uint32_t maximum_duty = (1 << 12) - 1;
+            if (duty[i] == maximum_duty && current_duty == maximum_duty) {
+                // We don't continue so that the transition wait is not messed up
+                ledc_set_duty_and_update(ledc_channels[i].speed_mode, ledc_channels[i].channel, maximum_duty - 1, 0);
+                // Duty cycle is only updated after a PWM cycle
+                vTaskDelay(pdMS_TO_TICKS(1));
+            }
+        }
+#endif
+
+        for (int i = 0; i < pins.size(); i++) {
+            ledc_set_fade_time_and_start(
                 ledc_channels[i].speed_mode,
                 ledc_channels[i].channel,
                 duty[i],
-                1000 * state.transition);
-            ledc_fade_start(
-                ledc_channels[i].speed_mode, 
-                ledc_channels[i].channel, 
-                i == (pins.size() - 1) ? LEDC_FADE_WAIT_DONE : LEDC_FADE_NO_WAIT);
+                1000 * state.transition,
+                i == (pins.size() - 1) ? LEDC_FADE_WAIT_DONE : LEDC_FADE_NO_WAIT
+            );
         }
 
         ESP_LOGD("LED", "Transition complete");

@@ -173,6 +173,8 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
             if (j.contains("transition")) {
                 state.transition = j["transition"];
+            } else {
+                state.transition = 0.1;
             }
 
             std::string json_string = state_to_json(light->second).dump();

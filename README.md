@@ -52,6 +52,9 @@ The following top-level configuration options are supported:
 
 See [`include/config.hpp`](/include/config.hpp) to take a peek into configuration values.
 
+:information_source: The JSON configuration file supports **comments** for documentation purposes, even though this is not part of the JSON specification. See [nlohmann/json](https://json.nlohmann.me/features/comments/) for more details.
+
+:warning: There is currently no method to re-upload the configuration file after flashing. You will need to rebuild the proejct.
 
 ## Questions
 

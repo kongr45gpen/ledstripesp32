@@ -5,8 +5,10 @@
 .vscode/ipch
 
 *.old
-/include/config.h
-/config.json
+/sdkconfig
+/config.json*
+/config.*.json
+!/config.json.example
 
 build
 /build*

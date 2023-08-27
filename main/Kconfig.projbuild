@@ -1,0 +1,9 @@
+menu "LED Strip ESP32 Configuration"
+
+	config CONFIG_PATH
+		string "JSON configuration file path"
+		default "config.json"
+		help
+			Path relative to main directory to the config.json file to be used for configuration.
+
+endmenu

@@ -23,14 +23,14 @@ This has been tested mostly on Linux (or WSL with [usbpid](https://github.com/do
     git clone --recursive https://github.com/kongr45gpen/ledstripesp32.git
     cd ledstripesp32
     ```
-4. Select the `sdkconfig` file you want to use, or create your own:
-    ```bash
-    cp sdkconfig.esp32c6 sdkconfig
-    ```
-5. Create a `config.json` file based on `config.example.json`:
+4. Create a `config.json` file based on `config.example.json`:
     ```bash
     cp config.example.json config.json
     editor config.json
+    ```
+5. Set the target microcontroller to use:
+    ```bash
+    idf.py set-target esp32c6
     ```
 5. Build the project!
     ```bash
@@ -51,6 +51,8 @@ The following top-level configuration options are supported:
 - **`display`**: Configure a connected SSD1036 display (optional). If a display is not connected, it will be ignored.
 
 See [`include/config.hpp`](/include/config.hpp) to take a peek into configuration values.
+
+If you want to use a different file than `config.json` (e.g. if you want to keep different JSON configuration files for different boards), you can change the `CONFIG_PATH` option through `idf.py menuconfig`, or by editing `sdkconfig` directly.
 
 :information_source: The JSON configuration file supports **comments** for documentation purposes, even though this is not part of the JSON specification. See [nlohmann/json](https://json.nlohmann.me/features/comments/) for more details.
 

@@ -8,8 +8,9 @@
 #include "driver/ledc.h"
 #include "config.hpp"
 #include "nlohmann/json.hpp"
+#include "led_strip.h"
 
-enum Color_Mode
+enum class Color_Mode
 {
     Brightness,
     Color_Temp,
@@ -49,6 +50,11 @@ class Light
     std::vector<Colour> colours;
 
     float gamma;
+
+    bool is_addressable = false;
+    std::optional<led_strip_t> addressable_configuration;
+    uint16_t addressable_led_width = 0;
+    uint16_t addressable_led_height = 0;
 
     std::vector<ledc_channel_config_t> ledc_channels;
 
@@ -121,7 +127,7 @@ public:
         .ww = 0,
         .cw = 0,
         .color_temperature = 400,
-        .color_mode = Color_Temp,
+        .color_mode = Color_Mode::Color_Temp,
         .transition = 0.1,
     };
 };

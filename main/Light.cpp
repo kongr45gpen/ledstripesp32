@@ -1,6 +1,7 @@
 #include "esp_log.h"
 #include "main.hpp"
 #include "Light.hpp"
+#include "led_strip.h"
 
 void Light::create_homeassistant_configuration(const std::string& device_name, const nlohmann::json& device) {
     ESP_LOGD("LED", "Generating HomeAssistant configuration for %s", device_name.c_str());
@@ -34,6 +35,34 @@ void Light::create_homeassistant_configuration(const std::string& device_name, c
 
         homeassistant_color_mode = "brightness";
         state.color_mode = Color_Mode::Brightness;
+    } else if (device["type"] == "addressable") {
+        pins = { device["pin"], device["pin"], device["pin"] };
+        
+        is_addressable = true;
+
+        homeassistant_color_mode = "rgb";
+        state.color_mode = Color_Mode::RGB;
+
+        if (device.contains("size")) {
+            if (device.contains("width")) {
+                addressable_led_width = device["width"];
+                addressable_led_height = device["size"].get<uint16_t>() / addressable_led_width;
+            } else if (device.contains("height")) {
+                addressable_led_height = device["height"];
+                addressable_led_width = device["size"].get<uint16_t>() / addressable_led_height;
+            } else {
+                addressable_led_width = device["size"];
+                addressable_led_height = 1;
+            }
+        } else if (device.contains("width") && device.contains("height")) {
+            addressable_led_width = device["width"];
+            addressable_led_height = device["height"];
+        } else {
+            ESP_LOGE("LED", "Device %s is addressable, but no size is specified", device_name.c_str());
+            addressable_led_height = 1;
+            addressable_led_width = 1;
+            return;
+        }
     } else {
         ESP_LOGE("LED", "Device %s has unknown type %s", device_name.c_str(), device["type"].get<std::string>().c_str());
         return;
@@ -67,9 +96,53 @@ void Light::create_homeassistant_configuration(const std::string& device_name, c
 
     ESP_LOGI("LED", "Read configuration for %s", device_name.c_str());
 
-    ledc_channels.resize(pins.size());
-    for (int i = 0; i < pins.size(); i++) {
-        ledc_channels[i] = generate_led_configuration(i);
+    if (!is_addressable) {
+        ledc_channels.resize(pins.size());
+        for (int i = 0; i < pins.size(); i++) {
+            ledc_channels[i] = generate_led_configuration(i);
+        }
+    } else {
+        addressable_configuration.emplace();
+        memset(&*addressable_configuration, 0, sizeof(*addressable_configuration));
+        addressable_configuration->rgb_led_type = RGB_LED_TYPE_WS2812;
+        addressable_configuration->rmt_channel = RMT_CHANNEL_1;
+        addressable_configuration->rmt_interrupt_num = 19;
+        addressable_configuration->gpio = static_cast<gpio_num_t>(pins[0]);
+        addressable_configuration->led_strip_buf_1 = (led_color_t*)malloc(sizeof(uint32_t) * addressable_led_width * addressable_led_height * 3);
+        addressable_configuration->led_strip_buf_2 = (led_color_t*)malloc(sizeof(uint32_t) * addressable_led_width * addressable_led_height * 3);
+        addressable_configuration->led_strip_length = addressable_led_width * addressable_led_height;
+        addressable_configuration->access_semaphore = xSemaphoreCreateBinary();
+        // led_strip_t cfg = {
+        //     .rgb_led_type = RGB_LED_TYPE_WS2812,
+        //     .led_strip_length = static_cast<uint32_t>(addressable_led_width * addressable_led_height),
+        //     .rmt_channel = RMT_CHANNEL_1,
+        //     .rmt_interrupt_num = 19,
+        //     .gpio = static_cast<gpio_num_t>(pins[0]),
+        //     .showing_buf_1 = false,
+        //     .led_strip_buf_1 = (led_color_t*)malloc(sizeof(uint32_t) * addressable_led_width * addressable_led_height * 3),
+        //     .led_strip_buf_2 = (led_color_t*)malloc(sizeof(uint32_t) * addressable_led_width * addressable_led_height * 3),
+        //     .access_semaphore = xSemaphoreCreateBinary()
+        // };
+
+        // //TODO: This is terrible, rewrite it in a better way
+        // ESP_LOGE("LED", "Addressable LED strip configuration. SIZEOF(OPTIONAL) == %d", sizeof(std::optional<led_strip_t>));
+        // auto opt = std::make_optional<led_strip_t>(cfg);
+        // memcpy((void*)&addressable_configuration, (void*)&opt, sizeof(opt));
+
+        // addressable_configuration.emplace({
+        //     static_cast<uint32_t>(RGB_LED_TYPE_WS2812),
+        //     static_cast<uint32_t>(addressable_led_width * addressable_led_height),
+        //     static_cast<uint32_t>(RMT_CHANNEL_1),
+        //     uint32_t{19},
+        //     static_cast<uint32_t>(pins[0]),
+        //     false,
+        //     (led_color_t*)malloc(sizeof(uint32_t) * addressable_led_width * addressable_led_height * 3),
+        //     (led_color_t*)malloc(sizeof(uint32_t) * addressable_led_width * addressable_led_height * 3),
+        //     xSemaphoreCreateBinary()
+        // });
+
+        ESP_ERROR_CHECK(!led_strip_init(&(*addressable_configuration)));
+        ESP_LOGI("LED", "Addressable LED strip initialised at pin %d", pins[0]);
     }
 }
 
@@ -132,7 +205,6 @@ void Light::render() {
         }
     }
 
-    // Print avaialble heap space
     ESP_LOGD("LED", "Heap free: %d", esp_get_free_heap_size());
     std::string duty_string = "Brightness output: ";
     for (auto d : duty) {
@@ -140,6 +212,26 @@ void Light::render() {
     }
     duty_string += "[gamma = " + std::to_string(gamma) + "]";
     ESP_LOGI("LED", "%s", duty_string.c_str());
+
+    if (is_addressable) {
+        uint16_t number_of_leds_on_0 = ceilf((duty[0] / 4095.f) * addressable_led_width * addressable_led_height);
+        uint16_t number_of_leds_on_1 = ceilf((duty[1] / 4095.f) * addressable_led_width * addressable_led_height);
+        uint16_t number_of_leds_on_2 = ceilf((duty[2] / 4095.f) * addressable_led_width * addressable_led_height);
+        uint8_t actual_brightness_0 = roundf(((float)number_of_leds_on_0 / (addressable_led_width * addressable_led_height)) * 255);
+        uint8_t actual_brightness_1 = roundf(((float)number_of_leds_on_1 / (addressable_led_width * addressable_led_height)) * 255);
+        uint8_t actual_brightness_2 = roundf(((float)number_of_leds_on_2 / (addressable_led_width * addressable_led_height)) * 255);
+
+        ESP_LOGD("LED", "Rendering addressable LED strip");
+        for (int i = 0; i < addressable_led_width * addressable_led_height; i++) {
+            led_strip_set_pixel_rgb(&*addressable_configuration, i, 
+                (i < number_of_leds_on_0) ? actual_brightness_0 : 0,
+                (i < number_of_leds_on_1) ? actual_brightness_1 : 0,
+                (i < number_of_leds_on_2) ? actual_brightness_2 : 0
+            );
+        }
+        ESP_ERROR_CHECK_WITHOUT_ABORT(!led_strip_show(&*addressable_configuration));
+        return;
+    }
 
     if (state.transition > 0) {
         // Sanity checks

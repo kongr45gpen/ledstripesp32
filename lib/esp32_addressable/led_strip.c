@@ -16,20 +16,17 @@
     ------------------------------------------------------------------------- */
 
 #include "led_strip.h"
+#include "esp_log.h"
 #include "freertos/task.h"
 
 #include <string.h>
 
-#define LED_STRIP_TASK_SIZE             configMINIMAL_STACK_SIZE
+#define LED_STRIP_TASK_SIZE             (512)
 #define LED_STRIP_TASK_PRIORITY         (configMAX_PRIORITIES - 1)
 
 #define LED_STRIP_REFRESH_PERIOD_MS     (30U) // TODO: add as parameter to led_strip_init
-#define EFFECT_CHANGE_CHECK_PERIOD_MS	(500U)//Period to check the effect parameters has changed
 
 #define LED_STRIP_NUM_RMT_ITEMS_PER_LED (24U) // Assumes 24 bit color for each led
-
-#define LED_STRIP_EFFECT_TASK_SIZE     	2048
-#define LED_STRIP_EFFECT_TASK_PRIORITY 	(configMAX_PRIORITIES - 2)
 
 // RMT Clock source is @ 80 MHz. Dividing it by 8 gives us 10 MHz frequency, or 100ns period.
 #define LED_STRIP_RMT_CLK_DIV (8)
@@ -268,7 +265,7 @@ static void led_strip_task(void *arg)
         rmt_write_items(led_strip->rmt_channel, rmt_items, num_items_malloc, false);
         prev_showing_buf_1 = led_strip->showing_buf_1;
         xSemaphoreGive(led_strip->access_semaphore);
-        vTaskDelay(LED_STRIP_REFRESH_PERIOD_MS / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(LED_STRIP_REFRESH_PERIOD_MS));
     }
 
     if (rmt_items) {
@@ -298,10 +295,12 @@ static bool led_strip_init_rmt(struct led_strip_t *led_strip)
 
     esp_err_t cfg_ok = rmt_config(&rmt_cfg);
     if (cfg_ok != ESP_OK) {
+        ESP_LOGE("led_strip", "rmt_config failed, error = %d", cfg_ok);
         return false;
     }
     esp_err_t install_ok = rmt_driver_install(rmt_cfg.channel, 0, 0);
     if (install_ok != ESP_OK) {
+        ESP_LOGE("led_strip", "rmt_driver_install failed, error = %d", install_ok);
         return false;
     }
 
@@ -312,17 +311,21 @@ bool led_strip_init(struct led_strip_t *led_strip)
 {
     TaskHandle_t led_strip_task_handle;
 
+    ESP_LOGI("led_strip", "Initializing LED strip at GPIO %d, RMT channel %d", led_strip->gpio, led_strip->rmt_channel);
+
     if ((led_strip == NULL) ||
         (led_strip->rmt_channel == RMT_CHANNEL_MAX) ||
-        (led_strip->gpio > GPIO_NUM_33) ||  // only inputs above 33
+        (led_strip->gpio > 33) ||  // only inputs above 33
         (led_strip->led_strip_buf_1 == NULL) ||
         (led_strip->led_strip_buf_2 == NULL) ||
         (led_strip->led_strip_length == 0) ||
         (led_strip->access_semaphore == NULL)) {
+        ESP_LOGE("led_strip", "Invalid parameters");
         return false;
     }
 
     if(led_strip->led_strip_buf_1 == led_strip->led_strip_buf_2) {
+        ESP_LOGE("led_strip", "led_strip_buf_1 and led_strip_buf_2 cannot be the same");
         return false;
     }
 
@@ -331,6 +334,7 @@ bool led_strip_init(struct led_strip_t *led_strip)
 
     bool init_rmt = led_strip_init_rmt(led_strip);
     if (!init_rmt) {
+        ESP_LOGE("led_strip", "led_strip_init_rmt failed");
         return false;
     }
 
@@ -344,10 +348,9 @@ bool led_strip_init(struct led_strip_t *led_strip)
                                          );
 
     if (!task_created) {
+        ESP_LOGE("led_strip", "could not create led_strip_task");
         return false;
     }
-
-    led_strip_effect_task_handle = NULL;
 
     return true;
 }
@@ -373,7 +376,13 @@ bool led_strip_set_pixel_rgb(struct led_strip_t *led_strip, uint32_t pixel_num, 
 {
     bool set_led_success = true;
 
-    if ((!led_strip) || (pixel_num > led_strip->led_strip_length)) {
+    if (!led_strip) {
+        ESP_LOGW("led_strip", "led_strip is NULL");
+        return false;
+    }
+
+    if (pixel_num > led_strip->led_strip_length) {
+        ESP_LOGW("led_strip", "pixel_num %lu is greater than led_strip_length %lu", pixel_num, led_strip->led_strip_length);
         return false;
     }
 
@@ -445,122 +454,11 @@ bool led_strip_clear(struct led_strip_t *led_strip)
         return false;
     }
 
-    if(led_strip_effect_task_handle != NULL)							//Check if the effect task is executing
-	{
-		vTaskDelete(led_strip_effect_task_handle);
-		led_strip_effect_task_handle = NULL;
-		vTaskDelay(100/portTICK_RATE_MS);
-	}
-
     if (led_strip->showing_buf_1) {
         memset(led_strip->led_strip_buf_2, 0, sizeof(struct led_color_t) * led_strip->led_strip_length);
-
     } else {
         memset(led_strip->led_strip_buf_1, 0, sizeof(struct led_color_t) * led_strip->led_strip_length);
     }
 
-	led_strip_show(led_strip);
-
     return success;
-}
-
-static void led_strip_effect_task(void *arg)
-{
-    struct led_strip_effect_t *led_strip_effect = (struct led_strip_effect_t *)arg;
-    enum rgb_effect_states_t rgb_effect_state = 0;
-
-    while(true)
-    {
-		switch (led_strip_effect->effect_type) {
-			case RGB:
-				led_strip_effect->new_led_strip_effect_t = false;
-				while(!led_strip_effect->new_led_strip_effect_t){
-					switch(rgb_effect_state){
-						case ALL_RED:
-							led_strip_effect->effect_color->blue = 0;
-							led_strip_effect->effect_color->red = 255;
-							rgb_effect_state++;
-							break;
-						case ALL_GREEN:
-							led_strip_effect->effect_color->red = 0;
-							led_strip_effect->effect_color->green = 255;
-							rgb_effect_state++;
-							break;
-						case ALL_BLUE:
-							led_strip_effect->effect_color->green = 0;
-							led_strip_effect->effect_color->blue = 255;
-							rgb_effect_state=ALL_RED;
-							break;
-					}
-					for (uint16_t index = 0; index < led_strip_effect->led_strip->led_strip_length; index++) {
-						led_strip_set_pixel_color(led_strip_effect->led_strip, index, led_strip_effect->effect_color);
-					}
-					led_strip_show(led_strip_effect->led_strip);
-					vTaskDelay((10000-39*led_strip_effect->speed)/portTICK_RATE_MS);
-				}
-				break;
-			case COLOR:
-				led_strip_effect->new_led_strip_effect_t = false;
-				while(!led_strip_effect->new_led_strip_effect_t){
-					for (uint16_t index = 0; index < led_strip_effect->led_strip->led_strip_length; index++) {
-						led_strip_set_pixel_color(led_strip_effect->led_strip, index, led_strip_effect->effect_color);
-					}
-					led_strip_show(led_strip_effect->led_strip);
-					//FIXME: when static, it could be possible to delete the task. Check for it.
-					vTaskDelay(LED_STRIP_REFRESH_PERIOD_MS / portTICK_PERIOD_MS);
-				}
-				break;
-
-			default:
-			    vTaskDelete(NULL);
-				break;
-		};
-		vTaskDelay(EFFECT_CHANGE_CHECK_PERIOD_MS / portTICK_PERIOD_MS);
-    }
-
-    vTaskDelete(NULL);
-}
-
-TaskHandle_t led_strip_effect_task_handle = NULL;
-/**
-  * @brief     	Initialize task to create pre-defined effects
-  *
-  * @param 		led_strip_effect pointer to LED effect context
-  * @param 		effect_type enum for pre-defined effects
-  * @param 		effect_speed overall effect speed (based on visual effect for each pre-defined effect)
-  * @param 		led_color overall color of the effect
-  *
-  * @return
-  *      -ESP_OK 	On success
-  *      -ESP_FAIL 	Generic code indicating failure
-  *
-  **/
-esp_err_t led_strip_set_effect(struct led_strip_effect_t *led_strip_effect, effect_type_t effect_type, struct led_color_t *effect_color, uint8_t effect_speed)
-{
-	if(led_strip_effect_task_handle == NULL)							//Check if the effect task is executing
-	{
-		led_strip_effect->new_led_strip_effect_t = true;
-		led_strip_effect->effect_type = effect_type;
-		led_strip_effect->speed = effect_speed;
-		led_strip_effect->effect_color = effect_color;
-		if (xTaskCreate(led_strip_effect_task,
-						"strip_effect",
-						LED_STRIP_EFFECT_TASK_SIZE,
-						led_strip_effect,
-						10,
-						&led_strip_effect_task_handle)
-		!= pdTRUE){
-			return ESP_FAIL;
-		}
-	}
-
-    if(led_strip_effect->effect_type != effect_type){
-    	led_strip_effect->new_led_strip_effect_t = true;
-    	led_strip_effect->effect_type = effect_type;
-    }
-    led_strip_effect->speed = effect_speed;
-	led_strip_effect->effect_color = effect_color;
-
-
-	return ESP_OK;
 }

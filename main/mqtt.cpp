@@ -20,17 +20,17 @@ static json state_to_json(const Light& light) {
 
     json json_state;
 
-    if (state.color_mode == Color_Temp) {
+    if (state.color_mode == Color_Mode::Color_Temp) {
         json_state["color_temp"] = state.color_temperature;
         json_state["color_mode"] = "color_temp";
-    } else if (state.color_mode == RGB) {
+    } else if (state.color_mode == Color_Mode::RGB) {
         json_state["color"] = {
             { "r", state.r, },
             { "g", state.g, },
             { "b", state.b, },
         };
         json_state["color_mode"] = "rgb";
-    } else if (state.color_mode == RGBW) {
+    } else if (state.color_mode == Color_Mode::RGBW) {
         json_state["color"] = {
             { "r", state.r, },
             { "g", state.g, },
@@ -38,7 +38,7 @@ static json state_to_json(const Light& light) {
             { "w", state.ww, },
         };
         json_state["color_mode"] = "rgbw";
-    } else if (state.color_mode == RGBWWCW) {
+    } else if (state.color_mode == Color_Mode::RGBWWCW) {
         json_state["color"] = {
             { "r", state.r, },
             { "g", state.g, },
@@ -47,7 +47,7 @@ static json state_to_json(const Light& light) {
             { "c", state.cw, },
         };
         json_state["color_mode"] = "rgbww";
-    } else if (state.color_mode == Brightness) {
+    } else if (state.color_mode == Color_Mode::Brightness) {
         json_state["color_mode"] = "brightness";
     } else {
         ESP_LOGW(TAG, "Unknown color mode %d", state.color_mode);
@@ -136,15 +136,15 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
             if (j.contains("color_mode")) {
                 if (j["color_mode"] == "color_temp") {
-                    state.color_mode = Color_Temp;
+                    state.color_mode = Color_Mode::Color_Temp;
                 } else if (j["color_mode"] == "rgb") {
-                    state.color_mode = RGB;
+                    state.color_mode = Color_Mode::RGB;
                 } else if (j["color_mode"] == "rgbw") {
-                    state.color_mode = RGBW;
+                    state.color_mode = Color_Mode::RGBW;
                 } else if (j["color_mode"] == "rgbww") {
-                    state.color_mode = RGBWWCW;
+                    state.color_mode = Color_Mode::RGBWWCW;
                 } else if (j["color_mode"] == "brightness") {
-                    state.color_mode = Brightness;
+                    state.color_mode = Color_Mode::Brightness;
                 } else {
                     ESP_LOGW(TAG, "Unknown color mode received in MQTT: %s", j["color_mode"].get<std::string>().c_str());
                 }
@@ -152,22 +152,22 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
             if (j.contains("color_temp")) {
                 state.color_temperature = j["color_temp"];
-                state.color_mode = Color_Temp;
+                state.color_mode = Color_Mode::Color_Temp;
             }
 
             if (j.contains("color")) {
                 state.r = j["color"]["r"];
                 state.g = j["color"]["g"];
                 state.b = j["color"]["b"];
-                state.color_mode = RGB;
+                state.color_mode = Color_Mode::RGB;
 
                 if (j["color"].contains("w")) {
                     state.ww = j["color"]["w"];
-                    state.color_mode = RGBW;
+                    state.color_mode = Color_Mode::RGBW;
                 }
                 if (j["color"].contains("c")) {
                     state.cw = j["color"]["c"];
-                    state.color_mode = RGBWWCW;
+                    state.color_mode = Color_Mode::RGBWWCW;
                 }
             }
 
